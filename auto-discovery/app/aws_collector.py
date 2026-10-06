@@ -125,6 +125,7 @@ def collect_and_write():
                     account        = ACCOUNT_NAME,
                     private_ip     = priv,
                     public_ip      = pub,
+                    state          = state,
                 )
 
                 # ── ec2_instance_info ──────────────────────────────

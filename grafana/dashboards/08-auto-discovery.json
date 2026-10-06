@@ -1,19 +1,21 @@
 {
   "uid": "ec2-auto-discovery",
   "title": "🔍 EC2 Auto-Discovery",
-  "description": "Live view of all auto-discovered EC2 instances across all regions",
+  "description": "Live view of all EC2 instances — running and stopped — auto-discovered every 2 minutes",
   "tags": ["ec2", "auto-discovery", "aws"],
   "timezone": "browser",
   "schemaVersion": 38,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": { "from": "now-1h", "to": "now" },
   "panels": [
+
     {
       "id": 1, "type": "row",
-      "title": "🔍 Discovery Status",
+      "title": "📊 Instance State Summary",
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
     },
+
     {
       "id": 2,
       "title": "Total EC2 Discovered",
@@ -23,51 +25,68 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "noValue": "0",
           "color": { "mode": "fixed", "fixedColor": "blue" }
         }
       },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "autodiscovery_instances_total", "legendFormat": "Total" }]
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "Prometheus" },
+        "expr": "count(ec2_instance_running) or count(count by (instance_id) (aws_ec2_cpuutilization_average)) or vector(0)",
+        "legendFormat": "Total"
+      }]
     },
+
     {
       "id": 3,
-      "title": "Monitored (Node Exporter UP)",
+      "title": "🟢 Running",
       "type": "stat",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "noValue": "0",
           "color": { "mode": "thresholds" },
           "thresholds": { "mode": "absolute", "steps": [
-            { "color": "red", "value": 0 },
+            { "color": "red",   "value": 0 },
             { "color": "green", "value": 1 }
           ]}
         }
       },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "autodiscovery_instances_monitored", "legendFormat": "Monitored" }]
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "Prometheus" },
+        "expr": "count(ec2_instance_running == 1) or count(count by (instance_id) (aws_ec2_cpuutilization_average)) or vector(0)",
+        "legendFormat": "Running"
+      }]
     },
+
     {
       "id": 4,
-      "title": "Missing Node Exporter",
+      "title": "🔴 Stopped",
       "type": "stat",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "noValue": "0",
           "color": { "mode": "thresholds" },
           "thresholds": { "mode": "absolute", "steps": [
             { "color": "green", "value": 0 },
-            { "color": "yellow", "value": 1 },
-            { "color": "red", "value": 3 }
+            { "color": "red",   "value": 1 }
           ]}
         }
       },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "autodiscovery_instances_missing", "legendFormat": "Missing" }]
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "Prometheus" },
+        "expr": "count(ec2_instance_running == 0) or vector(0)",
+        "legendFormat": "Stopped"
+      }]
     },
+
     {
       "id": 5,
       "title": "Discovery Runs Today",
@@ -77,12 +96,18 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "noValue": "0",
           "color": { "mode": "fixed", "fixedColor": "green" }
         }
       },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "increase(autodiscovery_runs_total[24h])", "legendFormat": "Runs" }]
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "Prometheus" },
+        "expr": "increase(autodiscovery_runs_total[24h]) or vector(0)",
+        "legendFormat": "Runs"
+      }]
     },
+
     {
       "id": 6,
       "title": "Last Discovery",
@@ -92,12 +117,18 @@
       "fieldConfig": {
         "defaults": {
           "unit": "dateTimeAsIso",
+          "noValue": "Never",
           "color": { "mode": "fixed", "fixedColor": "blue" }
         }
       },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "autodiscovery_last_run_timestamp * 1000", "legendFormat": "Last Run" }]
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "Prometheus" },
+        "expr": "ec2_collector_last_run_timestamp * 1000 or autodiscovery_last_run_timestamp * 1000",
+        "legendFormat": "Last Run"
+      }]
     },
+
     {
       "id": 7,
       "title": "Discovery Errors",
@@ -107,95 +138,53 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "noValue": "0",
           "color": { "mode": "thresholds" },
           "thresholds": { "mode": "absolute", "steps": [
             { "color": "green", "value": 0 },
-            { "color": "red", "value": 1 }
+            { "color": "red",   "value": 1 }
           ]}
         }
       },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
-      "targets": [{ "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "increase(autodiscovery_errors_total[24h]) or vector(0)", "legendFormat": "Errors" }]
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "Prometheus" },
+        "expr": "increase(autodiscovery_errors_total[24h]) or vector(0)",
+        "legendFormat": "Errors"
+      }]
     },
+
     {
       "id": 10, "type": "row",
-      "title": "📈 Discovery Trends",
+      "title": "🖥️ All EC2 Instances — Live State",
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 }
     },
+
     {
-      "id": 11,
-      "title": "Instance Count Over Time",
-      "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": { "mode": "palette-classic" },
-          "custom": { "lineWidth": 2, "fillOpacity": 15 }
-        }
-      },
-      "options": {
-        "tooltip": { "mode": "multi" },
-        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] }
-      },
-      "targets": [
-        { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "autodiscovery_instances_total", "legendFormat": "Total Discovered" },
-        { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "autodiscovery_instances_monitored", "legendFormat": "Monitored (NE UP)" },
-        { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "autodiscovery_instances_missing", "legendFormat": "Missing Node Exporter" }
-      ]
-    },
-    {
-      "id": 12,
-      "title": "Auto-Discovery Agent — CPU & Memory",
-      "type": "timeseries",
-      "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": { "mode": "palette-classic" },
-          "custom": { "lineWidth": 2, "fillOpacity": 10 }
-        }
-      },
-      "options": {
-        "tooltip": { "mode": "multi" },
-        "legend": { "displayMode": "list", "placement": "bottom" }
-      },
-      "targets": [
-        { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "rate(process_cpu_seconds_total{job=\"auto-discovery\"}[5m]) * 100", "legendFormat": "CPU %" },
-        { "datasource": { "type": "prometheus", "uid": "Prometheus" }, "expr": "process_resident_memory_bytes{job=\"auto-discovery\"} / 1024 / 1024", "legendFormat": "Memory MB" }
-      ]
-    },
-    {
-      "id": 20, "type": "row",
-      "title": "🖥️ Discovered EC2 Instances",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 }
-    },
-    {
-      "id": 21,
-      "title": "All Auto-Discovered EC2 Instances",
-      "description": "All instances from AWS — CPU & Health via CloudWatch. No Node Exporter needed.",
+      "id": 20,
+      "title": "EC2 Instance Inventory — Running & Stopped",
+      "description": "All instances discovered by auto-discovery. State updates every 2 minutes. Stopped instances show 🔴.",
       "type": "table",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 15 },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 6 },
       "options": {
         "showHeader": true,
-        "sortBy": [{ "displayName": "Instance Name", "desc": false }]
+        "cellHeight": "md",
+        "sortBy": [{ "displayName": "State", "desc": false }]
       },
       "fieldConfig": {
         "defaults": { "custom": { "align": "left" } },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Health" },
+            "matcher": { "id": "byName", "options": "State" },
             "properties": [
-              { "id": "custom.width", "value": 130 },
+              { "id": "custom.width", "value": 120 },
               { "id": "custom.displayMode", "value": "color-background" },
               { "id": "mappings", "value": [{
                 "type": "value",
                 "options": {
-                  "0": { "text": "🟢 Healthy",     "color": "green", "index": 0 },
-                  "1": { "text": "🔴 Failed",       "color": "red",   "index": 1 }
+                  "1": { "text": "🟢 Running", "color": "green", "index": 0 },
+                  "0": { "text": "🔴 Stopped", "color": "red",   "index": 1 }
                 }
               }]}
             ]
@@ -205,7 +194,7 @@
             "properties": [
               { "id": "unit", "value": "percent" },
               { "id": "decimals", "value": 1 },
-              { "id": "custom.width", "value": 110 },
+              { "id": "custom.width", "value": 100 },
               { "id": "custom.displayMode", "value": "color-background" },
               { "id": "thresholds", "value": { "mode": "absolute", "steps": [
                 { "color": "green",  "value": 0  },
@@ -215,16 +204,20 @@
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "Network In" },
-            "properties": [{ "id": "unit", "value": "bytes" }, { "id": "custom.width", "value": 120 }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "Network Out" },
-            "properties": [{ "id": "unit", "value": "bytes" }, { "id": "custom.width", "value": 120 }]
+            "matcher": { "id": "byName", "options": "Instance Name" },
+            "properties": [{ "id": "custom.width", "value": 180 }]
           },
           {
             "matcher": { "id": "byName", "options": "Instance ID" },
             "properties": [{ "id": "custom.width", "value": 200 }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Type" },
+            "properties": [{ "id": "custom.width", "value": 110 }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Region" },
+            "properties": [{ "id": "custom.width", "value": 110 }]
           },
           {
             "matcher": { "id": "byName", "options": "Time" },
@@ -234,33 +227,17 @@
       },
       "targets": [
         {
+          "refId": "State",
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "ec2_instance_running",
+          "instant": true,
+          "format": "table",
+          "legendFormat": ""
+        },
+        {
           "refId": "CPU",
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "aws_ec2_cpuutilization_average",
-          "instant": true,
-          "format": "table",
-          "legendFormat": ""
-        },
-        {
-          "refId": "Health",
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "aws_ec2_status_check_failed_sum or (aws_ec2_cpuutilization_average * 0)",
-          "instant": true,
-          "format": "table",
-          "legendFormat": ""
-        },
-        {
-          "refId": "NetIn",
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "aws_ec2_network_in_sum or (aws_ec2_cpuutilization_average * 0)",
-          "instant": true,
-          "format": "table",
-          "legendFormat": ""
-        },
-        {
-          "refId": "NetOut",
-          "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "aws_ec2_network_out_sum or (aws_ec2_cpuutilization_average * 0)",
+          "expr": "ec2_cpu_percent or (ec2_instance_running * 0)",
           "instant": true,
           "format": "table",
           "legendFormat": ""
@@ -273,34 +250,108 @@
           "options": {
             "excludeByName": {
               "Time": true, "job": true, "__name__": true,
-              "instance": true, "monitor": true, "environment": true,
-              "dimension_name": true, "dimension_value": true
+              "account": true, "private_ip": true, "public_ip": true
             },
             "renameByName": {
-              "instance_id":   "Instance ID",
-              "Value #CPU":    "CPU %",
-              "Value #Health": "Health",
-              "Value #NetIn":  "Network In",
-              "Value #NetOut": "Network Out"
+              "instance_name":  "Instance Name",
+              "instance_id":    "Instance ID",
+              "instance_type":  "Type",
+              "region":         "Region",
+              "az":             "AZ",
+              "os":             "OS",
+              "env":            "Env",
+              "state":          "State Label",
+              "Value #State":   "State",
+              "Value #CPU":     "CPU %"
             },
             "indexByName": {
-              "Instance ID": 0,
-              "Health":      1,
-              "CPU %":       2,
-              "Network In":  3,
-              "Network Out": 4
+              "Instance Name": 0,
+              "Instance ID":   1,
+              "State":         2,
+              "CPU %":         3,
+              "Type":          4,
+              "Region":        5,
+              "AZ":            6,
+              "OS":            7,
+              "Env":           8
             }
           }
         },
         {
           "id": "filterByValue",
           "options": {
-            "filters": [{ "config": { "id": "isNull", "options": {} }, "fieldName": "CPU %", "type": "exclude" }],
+            "filters": [{ "config": { "id": "isNull", "options": {} }, "fieldName": "State", "type": "exclude" }],
             "match": "any",
             "type": "exclude"
           }
         }
       ]
+    },
+
+    {
+      "id": 30, "type": "row",
+      "title": "📈 Instance State Over Time",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 }
+    },
+
+    {
+      "id": 31,
+      "title": "Running vs Stopped Over Time",
+      "description": "Shows state changes — when an instance is stopped it drops to 0",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 15, "lineInterpolation": "stepAfter" }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "count(ec2_instance_running == 1) or vector(0)",
+          "legendFormat": "🟢 Running"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "count(ec2_instance_running == 0) or vector(0)",
+          "legendFormat": "🔴 Stopped"
+        }
+      ]
+    },
+
+    {
+      "id": 32,
+      "title": "CPU % per Instance (Running Only)",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"] }
+      },
+      "targets": [{
+        "datasource": { "type": "prometheus", "uid": "Prometheus" },
+        "expr": "ec2_cpu_percent",
+        "legendFormat": "{{ instance_name }}"
+      }]
     }
+
   ]
 }
