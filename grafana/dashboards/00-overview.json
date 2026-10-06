@@ -197,7 +197,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "count(ec2_instance_running == 1) or count(aws_ec2_cpuutilization_average) or vector(0)",
+          "expr": "ec2_running_instances or count(count by (instance_id) (aws_ec2_cpuutilization_average)) or vector(0)",
           "legendFormat": "Running EC2"
         }
       ]
@@ -224,7 +224,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "ec2_total_instances or count(aws_ec2_cpuutilization_average) or vector(0)",
+          "expr": "ec2_total_instances or count(count by (instance_id) (aws_ec2_cpuutilization_average)) or vector(0)",
           "legendFormat": "Total EC2"
         }
       ]

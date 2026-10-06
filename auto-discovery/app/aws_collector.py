@@ -70,12 +70,13 @@ def get_cloudwatch_metric(cw, instance_id: str, metric_name: str,
 
 def collect_and_write():
     """
-    Main collection function. Fetches all EC2 instances and their
+    Main collection function. Fetches ONLY RUNNING EC2 instances and their
     CloudWatch metrics, then writes them to a Prometheus textfile.
+    Only running instances are written — stopped/terminated instances
+    are automatically removed from the textfile on the next collection run.
     """
     os.makedirs(PROM_DIR, exist_ok=True)
     lines = []
-    timestamp_ms = int(time.time() * 1000)
     total_instances = 0
     total_running   = 0
 
@@ -84,8 +85,8 @@ def collect_and_write():
             ec2 = boto3.client("ec2", region_name=region)
             cw  = boto3.client("cloudwatch", region_name=region)
 
-            # ── Fetch all instances ─────────────────────────────────
-            filters = []
+            # ── Fetch ONLY running instances ────────────────────────
+            filters = [{"Name": "instance-state-name", "Values": ["running"]}]
             if TAG_FILTER:
                 filters.append({"Name": f"tag:{TAG_FILTER}", "Values": [TAG_VALUE]})
 
@@ -95,24 +96,22 @@ def collect_and_write():
                 for res in page["Reservations"]:
                     instances.extend(res["Instances"])
 
-            logger.info("Region %s: %d instances", region, len(instances))
+            logger.info("Region %s: %d running instances", region, len(instances))
             total_instances += len(instances)
 
             for inst in instances:
                 iid   = inst["InstanceId"]
                 tags  = {t["Key"]: t["Value"] for t in inst.get("Tags", [])}
                 name  = tags.get("Name", iid)
-                state = inst["State"]["Name"]
+                state = inst["State"]["Name"]   # always "running" here
                 itype = inst["InstanceType"]
                 az    = inst["Placement"]["AvailabilityZone"]
                 priv  = inst.get("PrivateIpAddress", "")
                 pub   = inst.get("PublicIpAddress", "")
                 plat  = "windows" if inst.get("Platform", "").lower() == "windows" else "linux"
                 env   = tags.get("Environment", tags.get("Env", "production"))
-                is_running = 1 if state == "running" else 0
 
-                if is_running:
-                    total_running += 1
+                total_running += 1
 
                 lbl = _labels(
                     instance_id    = iid,
@@ -129,54 +128,56 @@ def collect_and_write():
                 )
 
                 # ── ec2_instance_info ──────────────────────────────
-                lines.append(f'# HELP ec2_instance_info EC2 instance metadata')
+                lines.append(f'# HELP ec2_instance_info EC2 instance metadata (running instances only)')
                 lines.append(f'# TYPE ec2_instance_info gauge')
                 lines.append(f'ec2_instance_info{lbl} 1')
 
-                # ── ec2_instance_running ───────────────────────────
-                lines.append(f'ec2_instance_running{lbl} {is_running}')
+                # ── ec2_instance_running — always 1 (only running fetched) ──
+                lines.append(f'# HELP ec2_instance_running 1=running (metric absent=stopped)')
+                lines.append(f'# TYPE ec2_instance_running gauge')
+                lines.append(f'ec2_instance_running{lbl} 1')
 
-                if is_running:
-                    # ── CPU ──────────────────────────────────────
-                    cpu = get_cloudwatch_metric(cw, iid, "CPUUtilization", "Average")
-                    if cpu is not None:
-                        lines.append(f'# HELP ec2_cpu_percent CPU utilization % from CloudWatch')
-                        lines.append(f'# TYPE ec2_cpu_percent gauge')
-                        lines.append(f'ec2_cpu_percent{lbl} {cpu:.4f}')
+                # ── CPU ──────────────────────────────────────────────
+                cpu = get_cloudwatch_metric(cw, iid, "CPUUtilization", "Average")
+                if cpu is not None:
+                    lines.append(f'# HELP ec2_cpu_percent CPU utilization % from CloudWatch')
+                    lines.append(f'# TYPE ec2_cpu_percent gauge')
+                    lines.append(f'ec2_cpu_percent{lbl} {cpu:.4f}')
 
-                    # ── Network In ───────────────────────────────
-                    net_in = get_cloudwatch_metric(cw, iid, "NetworkIn", "Sum")
-                    if net_in is not None:
-                        lines.append(f'# HELP ec2_network_in_bytes Network bytes received (5 min sum)')
-                        lines.append(f'# TYPE ec2_network_in_bytes gauge')
-                        lines.append(f'ec2_network_in_bytes{lbl} {net_in:.0f}')
+                # ── Network In ───────────────────────────────────────
+                net_in = get_cloudwatch_metric(cw, iid, "NetworkIn", "Sum")
+                if net_in is not None:
+                    lines.append(f'# HELP ec2_network_in_bytes Network bytes received (5 min sum)')
+                    lines.append(f'# TYPE ec2_network_in_bytes gauge')
+                    lines.append(f'ec2_network_in_bytes{lbl} {net_in:.0f}')
 
-                    # ── Network Out ──────────────────────────────
-                    net_out = get_cloudwatch_metric(cw, iid, "NetworkOut", "Sum")
-                    if net_out is not None:
-                        lines.append(f'# HELP ec2_network_out_bytes Network bytes sent (5 min sum)')
-                        lines.append(f'# TYPE ec2_network_out_bytes gauge')
-                        lines.append(f'ec2_network_out_bytes{lbl} {net_out:.0f}')
+                # ── Network Out ──────────────────────────────────────
+                net_out = get_cloudwatch_metric(cw, iid, "NetworkOut", "Sum")
+                if net_out is not None:
+                    lines.append(f'# HELP ec2_network_out_bytes Network bytes sent (5 min sum)')
+                    lines.append(f'# TYPE ec2_network_out_bytes gauge')
+                    lines.append(f'ec2_network_out_bytes{lbl} {net_out:.0f}')
 
-                    # ── Status Check ─────────────────────────────
-                    sc = get_cloudwatch_metric(cw, iid, "StatusCheckFailed", "Sum", period=60)
-                    ok = 1 if sc is not None and sc == 0 else (0 if sc is not None else 1)
-                    lines.append(f'# HELP ec2_status_check_ok 1=passing 0=failing')
-                    lines.append(f'# TYPE ec2_status_check_ok gauge')
-                    lines.append(f'ec2_status_check_ok{lbl} {ok}')
+                # ── Status Check ─────────────────────────────────────
+                sc = get_cloudwatch_metric(cw, iid, "StatusCheckFailed", "Sum", period=60)
+                ok = 1 if sc is not None and sc == 0 else (0 if sc is not None else 1)
+                lines.append(f'# HELP ec2_status_check_ok 1=passing 0=failing')
+                lines.append(f'# TYPE ec2_status_check_ok gauge')
+                lines.append(f'ec2_status_check_ok{lbl} {ok}')
 
-                logger.info("  ✅ %s (%s) state=%s cpu=%s",
-                            name, iid, state,
-                            f"{cpu:.1f}%" if (is_running and cpu is not None) else "n/a")
+                logger.info("  ✅ %s (%s) running — cpu=%s",
+                            name, iid,
+                            f"{cpu:.1f}%" if cpu is not None else "pending")
 
         except Exception as e:
             logger.error("Region %s collection failed: %s", region, e, exc_info=True)
 
     # ── Summary metrics ─────────────────────────────────────────────
+    # total_instances == total_running since we only fetch running instances
     acct_lbl = _labels(account=ACCOUNT_NAME)
-    lines.append(f'# HELP ec2_total_instances Total EC2 instances discovered')
+    lines.append(f'# HELP ec2_total_instances Total running EC2 instances discovered')
     lines.append(f'# TYPE ec2_total_instances gauge')
-    lines.append(f'ec2_total_instances{acct_lbl} {total_instances}')
+    lines.append(f'ec2_total_instances{acct_lbl} {total_running}')
 
     lines.append(f'# HELP ec2_running_instances Running EC2 instances')
     lines.append(f'# TYPE ec2_running_instances gauge')
