@@ -1,15 +1,7 @@
 global:
   resolve_timeout: 5m
-
-  # ── SMTP Settings — credentials loaded from AWS Secrets Manager ──────
-  # Run: sudo bash scripts/load-smtp-secret.sh
-  # This populates SMTP_HOST / SMTP_USER / SMTP_PASSWORD from
-  # AWS Secrets Manager (secret: observability/ses-smtp)
-  # NO passwords stored in this file or in .env
-  smtp_smarthost:     '${SMTP_HOST:-email-smtp.us-east-1.amazonaws.com:587}'
-  smtp_from:          '${SMTP_FROM:-observability-alerts@timesgroup.com}'
-  smtp_auth_username: '${SMTP_USER:-}'
-  smtp_auth_password: '${SMTP_PASSWORD:-}'
+  smtp_smarthost:     'email-smtp.us-east-1.amazonaws.com:587'
+  smtp_from:          'observability-alerts@timesgroup.com'
   smtp_require_tls:   true
 
 # ── Templates ─────────────────────────────────────────────────────────
@@ -18,14 +10,6 @@ templates:
 
 # ══════════════════════════════════════════════════════════════════════
 # ROUTING TREE
-#
-# Priority levels:
-#   P1 (critical) → Email immediately + MS Teams + repeat every 1h
-#   P2 (warning)  → Email + MS Teams + repeat every 4h
-#   P3 (warning)  → Email daily digest + MS Teams
-#
-# continue: true means alert matches this route AND falls through
-# to the next matching route (so both email + teams fire)
 # ══════════════════════════════════════════════════════════════════════
 route:
   receiver: 'msteams-default'
@@ -63,7 +47,7 @@ route:
       repeat_interval: 12h
       continue: false
 
-    # ── SSL Expiry — separate routing ─────────────────────────────────
+    # ── SSL Expiry ─────────────────────────────────────────────────────
     - match_re:
         alertname: 'SSLCertExpired|SSLCertExpiringCritical'
       receiver: p1-critical
@@ -81,7 +65,7 @@ route:
 # ══════════════════════════════════════════════════════════════════════
 receivers:
 
-  # ── Default (fallback) ─────────────────────────────────────────────
+  # ── Default (fallback) — MS Teams only ────────────────────────────
   - name: 'msteams-default'
     webhook_configs:
       - url: 'http://alertmanager-msteams:2000/alertmanager'
@@ -98,12 +82,6 @@ receivers:
           X-Priority: '1'
           X-Alert-Priority: 'P1-Critical'
           Importance: 'high'
-        smarthost: '${SMTP_HOST:-smtp.gmail.com:587}'
-        from:      '${SMTP_FROM:-observability-alerts@gmail.com}'
-        auth_username: '${SMTP_USER:-}'
-        auth_password: '${SMTP_PASSWORD:-}'
-        require_tls: true
-
     webhook_configs:
       - url: 'http://alertmanager-msteams:2000/alertmanager'
         send_resolved: true
@@ -118,12 +96,6 @@ receivers:
         headers:
           X-Priority: '2'
           X-Alert-Priority: 'P2-High'
-        smarthost: '${SMTP_HOST:-smtp.gmail.com:587}'
-        from:      '${SMTP_FROM:-observability-alerts@gmail.com}'
-        auth_username: '${SMTP_USER:-}'
-        auth_password: '${SMTP_PASSWORD:-}'
-        require_tls: true
-
     webhook_configs:
       - url: 'http://alertmanager-msteams:2000/alertmanager'
         send_resolved: true
@@ -138,18 +110,11 @@ receivers:
         headers:
           X-Priority: '3'
           X-Alert-Priority: 'P3-Medium'
-        smarthost: '${SMTP_HOST:-smtp.gmail.com:587}'
-        from:      '${SMTP_FROM:-observability-alerts@gmail.com}'
-        auth_username: '${SMTP_USER:-}'
-        auth_password: '${SMTP_PASSWORD:-}'
-        require_tls: true
-
     webhook_configs:
       - url: 'http://alertmanager-msteams:2000/alertmanager'
         send_resolved: true
 
 # ── Inhibit Rules ──────────────────────────────────────────────────────
-# P1 suppresses P2/P3 for same alert on same instance
 inhibit_rules:
   - source_match:
       priority: 'P1'
