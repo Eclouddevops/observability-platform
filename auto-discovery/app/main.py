@@ -1,16 +1,14 @@
 """
 EC2 Auto-Discovery Agent v4 — Zero Touch
 ─────────────────────────────────────────
-Every 2 minutes:
-  1. Calls AWS EC2 + CloudWatch APIs directly
-  2. Writes /prometheus_textfiles/ec2_metrics.prom
-  3. Prometheus Node Exporter textfile_collector reads it automatically
-  4. Metrics appear in Prometheus — dashboard updates
+Every 30 seconds (state) / 2 minutes (CloudWatch metrics):
+  1. Calls AWS EC2 API directly — INSTANT state (running/stopped)
+  2. Exposes ec2_instance_state gauge on /metrics endpoint
+  3. Prometheus scrapes /metrics every 30s → dashboard updates in <30s
+  4. CloudWatch metrics (CPU/Network) collected every 2 min separately
 
-No CloudWatch Exporter needed. No Node Exporter on target instances.
-No SSH. No port 9100. Just IAM role on this server.
-
-New instances appear in dashboard within 2 minutes of launch.
+State detection is INSTANT via EC2 API — no CloudWatch delay.
+New/stopped instances appear in dashboard within 30 seconds.
 
 API:
   GET  /health    - status + next scan
@@ -25,12 +23,13 @@ import logging
 import os
 from datetime import datetime, timezone, timedelta
 
+import boto3
 import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import Counter, Gauge, Info, generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
 
 from .aws_collector import collect_and_write
@@ -41,8 +40,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-INTERVAL   = int(os.getenv("DISCOVERY_INTERVAL_MINUTES", "2"))
-PROM_DIR   = os.getenv("PROM_TEXTFILE_DIR", "/prometheus_textfiles")
+INTERVAL        = int(os.getenv("DISCOVERY_INTERVAL_MINUTES", "2"))
+STATE_INTERVAL  = int(os.getenv("STATE_INTERVAL_SECONDS", "30"))
+PROM_DIR        = os.getenv("PROM_TEXTFILE_DIR", "/prometheus_textfiles")
+REGIONS         = [r.strip() for r in os.getenv("AWS_REGIONS", "us-east-1").split(",") if r.strip()]
+TAG_FILTER_KEY  = os.getenv("TAG_FILTER_KEY", "")
+TAG_FILTER_VAL  = os.getenv("TAG_FILTER_VALUE", "true")
 
 # ── Self metrics ────────────────────────────────────────────────────
 runs_total    = Counter("autodiscovery_runs_total",          "Total collection runs")
@@ -53,6 +56,22 @@ duration_g    = Gauge("autodiscovery_duration_seconds",      "Last collection du
 last_run_g    = Gauge("autodiscovery_last_run_timestamp",    "Last run unix timestamp")
 next_run_g    = Gauge("autodiscovery_next_run_timestamp",    "Next run unix timestamp")
 
+# ── Real-time EC2 state metrics (scraped every 30s) ─────────────────
+# These are labeled gauges — one time series per instance
+ec2_state_g = Gauge(
+    "ec2_instance_state",
+    "EC2 instance state: 1=running 0=stopped. Updated every 30s via AWS EC2 API.",
+    ["instance_id", "instance_name", "instance_type", "region", "az", "os", "env", "account"]
+)
+ec2_running_total_g = Gauge(
+    "ec2_running_total",
+    "Total number of running EC2 instances (live from AWS EC2 API)"
+)
+ec2_stopped_total_g = Gauge(
+    "ec2_stopped_total",
+    "Total number of stopped EC2 instances (live from AWS EC2 API)"
+)
+
 app = FastAPI(title="EC2 Auto-Discovery v4", version="4.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -60,6 +79,82 @@ scheduler    = AsyncIOScheduler()
 last_result  = {}
 run_count    = 0
 next_run_at  = None
+
+# Track known instance label sets so we can clear stale ones
+_known_instance_labels: set = set()
+
+
+def poll_ec2_state():
+    """
+    Fast EC2 state poll — calls AWS EC2 API directly.
+    Updates ec2_instance_state gauge for every instance.
+    Takes ~1-2 seconds. No CloudWatch involved — INSTANT state.
+    Called every STATE_INTERVAL_SECONDS (default 30s).
+    """
+    global _known_instance_labels
+
+    try:
+        running_count = 0
+        stopped_count = 0
+        current_labels = set()
+
+        for region in REGIONS:
+            ec2 = boto3.client("ec2", region_name=region)
+            filters = []
+            if TAG_FILTER_KEY:
+                filters.append({"Name": f"tag:{TAG_FILTER_KEY}", "Values": [TAG_FILTER_VAL]})
+
+            # Fetch ALL instances (running + stopped) for accurate state
+            paginator = ec2.get_paginator("describe_instances")
+            for page in paginator.paginate(Filters=filters):
+                for res in page["Reservations"]:
+                    for inst in res["Instances"]:
+                        state = inst["State"]["Name"]
+                        # Skip terminated/terminating — they're gone
+                        if state in ("terminated", "terminating"):
+                            continue
+
+                        tags         = {t["Key"]: t["Value"] for t in inst.get("Tags", [])}
+                        iid          = inst["InstanceId"]
+                        name         = tags.get("Name", iid)
+                        itype        = inst["InstanceType"]
+                        az           = inst["Placement"]["AvailabilityZone"]
+                        plat         = "windows" if inst.get("Platform", "").lower() == "windows" else "linux"
+                        env          = tags.get("Environment", tags.get("Env", "production"))
+                        is_running   = 1 if state == "running" else 0
+
+                        label_key = (iid, region)
+                        current_labels.add(label_key)
+
+                        ec2_state_g.labels(
+                            instance_id=iid, instance_name=name,
+                            instance_type=itype, region=region,
+                            az=az, os=plat, env=env,
+                            account=os.getenv("PRIMARY_ACCOUNT_NAME", "production")
+                        ).set(is_running)
+
+                        if is_running:
+                            running_count += 1
+                        else:
+                            stopped_count += 1
+
+        # Remove stale labels (terminated instances)
+        stale = _known_instance_labels - current_labels
+        for (iid, region) in stale:
+            try:
+                ec2_state_g.remove(iid, region)
+            except Exception:
+                pass
+        _known_instance_labels = current_labels
+
+        # Update totals
+        ec2_running_total_g.set(running_count)
+        ec2_stopped_total_g.set(stopped_count)
+
+        logger.info("⚡ State poll: %d running, %d stopped", running_count, stopped_count)
+
+    except Exception as e:
+        logger.error("State poll failed: %s", e)
 
 
 async def run_collection():
@@ -107,15 +202,24 @@ async def startup():
     os.makedirs(PROM_DIR, exist_ok=True)
 
     logger.info("╔══════════════════════════════════════════════════╗")
-    logger.info("║  EC2 AUTO-DISCOVERY AGENT v4 — ZERO TOUCH       ║")
+    logger.info("║  EC2 AUTO-DISCOVERY AGENT v5 — INSTANT STATE    ║")
     logger.info("╠══════════════════════════════════════════════════╣")
-    logger.info("║  Interval  : every %d minutes                   ║", INTERVAL)
-    logger.info("║  Regions   : %-34s ║", os.getenv("AWS_REGIONS", "us-east-1"))
-    logger.info("║  Output    : %s   ║", PROM_DIR)
-    logger.info("║  Method    : Direct AWS API → textfile           ║")
+    logger.info("║  State poll : every %ds (AWS EC2 API — instant) ║", STATE_INTERVAL)
+    logger.info("║  CW metrics : every %d minutes                  ║", INTERVAL)
+    logger.info("║  Regions    : %-33s ║", os.getenv("AWS_REGIONS", "us-east-1"))
     logger.info("╚══════════════════════════════════════════════════╝")
 
-    # Schedule recurring collection
+    # ── Fast state poll every 30s (EC2 API — no CloudWatch delay) ───
+    loop = asyncio.get_event_loop()
+    scheduler.add_job(
+        lambda: loop.run_in_executor(None, poll_ec2_state),
+        trigger=IntervalTrigger(seconds=STATE_INTERVAL),
+        id="ec2-state-poll",
+        max_instances=1,
+        coalesce=True,
+    )
+
+    # ── CloudWatch metrics collection every 2 min ────────────────────
     scheduler.add_job(
         run_collection,
         trigger=IntervalTrigger(minutes=INTERVAL),
@@ -125,9 +229,10 @@ async def startup():
     )
     scheduler.start()
 
-    # Run immediately on startup
+    # Run both immediately on startup
+    loop.run_in_executor(None, poll_ec2_state)
     asyncio.create_task(run_collection())
-    logger.info("🚀 First collection starting now...")
+    logger.info("🚀 State poll + collection starting now...")
 
 
 @app.on_event("shutdown")

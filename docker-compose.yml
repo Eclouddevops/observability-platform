@@ -192,7 +192,7 @@ services:
     ports:
       - "2000:2000"
     environment:
-      - TEAMS_INCOMING_WEBHOOK_URL=${MSTEAMS_WEBHOOK_URL:-}
+      - TEAMS_INCOMING_WEBHOOK_URL=${MSTEAMS_WEBHOOK_URL:-https://outlook.office.com/webhook/placeholder}
       - TEAMS_REQUEST_TIMEOUT=30s
     volumes:
       - ./alertmanager/msteams-config.yml:/etc/alertmanager-msteams/config.yml:ro

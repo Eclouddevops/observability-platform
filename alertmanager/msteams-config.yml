@@ -1,4 +1,5 @@
 connectors:
-  # Default channel — all alerts go here unless overridden
+  # Default channel — set MSTEAMS_WEBHOOK_URL in .env to enable
+  # Format: https://outlook.office.com/webhook/YOUR-WEBHOOK-URL
   - name: "alertmanager"
-    webhookUrl: "${MSTEAMS_WEBHOOK_URL}"
+    webhookUrl: "https://outlook.office.com/webhook/placeholder"

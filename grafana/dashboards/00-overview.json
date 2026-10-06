@@ -171,10 +171,101 @@
       "targets": [{ "datasource": { "type": "prometheus", "uid": "${datasource}" }, "expr": "count(ALERTS{alertstate=\"firing\"}) or vector(0)", "legendFormat": "Firing" }]
     },
     {
+      "id": 17,
+      "title": "🖥️ Running EC2 Instances",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 12 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red",    "value": 0 },
+            { "color": "yellow", "value": 1 },
+            { "color": "green",  "value": 2 }
+          ]},
+          "unit": "short",
+          "noValue": "0"
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "ec2_running_total or count(count by (instance_id) (max_over_time(aws_ec2_cpuutilization_average[10m]))) or vector(0)",
+          "legendFormat": "Running EC2"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "title": "🖥️ Total EC2 Discovered",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 12 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "blue" },
+          "unit": "short",
+          "noValue": "0"
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "ec2_running_total or vector(0)",
+          "legendFormat": "Total EC2"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "title": "🖥️ EC2 Node Exporter UP",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 12 },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red",    "value": 0 },
+            { "color": "yellow", "value": 1 },
+            { "color": "green",  "value": 2 }
+          ]},
+          "unit": "short",
+          "noValue": "0"
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "expr": "count(up{job=\"ec2-nodes\"} == 1) or vector(0)",
+          "legendFormat": "Node Exporter UP"
+        }
+      ]
+    },
+    {
       "id": 20,
       "type": "row",
       "title": "🖥️ EC2 Instances",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 12 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
       "collapsed": false
     },
     {
@@ -182,7 +273,7 @@
       "title": "EC2 CPU Utilization",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 17 },
       "fieldConfig": {
         "defaults": { "unit": "percent", "min": 0, "max": 100, "color": { "mode": "palette-classic" } },
         "overrides": []
@@ -197,7 +288,7 @@
       "title": "EC2 Memory Usage",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 17 },
       "fieldConfig": {
         "defaults": { "unit": "percent", "min": 0, "max": 100, "color": { "mode": "palette-classic" } }
       },
@@ -210,7 +301,7 @@
       "id": 30,
       "type": "row",
       "title": "🌐 Website & URL Monitoring",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 25 },
       "collapsed": false
     },
     {
@@ -218,7 +309,7 @@
       "title": "URL Status",
       "type": "table",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 26 },
       "fieldConfig": {
         "defaults": { "custom": { "displayMode": "color-background" } },
         "overrides": [
@@ -241,7 +332,7 @@
       "title": "Response Time",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 26 },
       "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "palette-classic" } } },
       "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
       "targets": [
@@ -252,7 +343,7 @@
       "id": 40,
       "type": "row",
       "title": "🔐 SSL Certificate Expiry",
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 34 },
       "collapsed": false
     },
     {
@@ -260,7 +351,7 @@
       "title": "SSL Certificate Expiry (Days Remaining)",
       "type": "table",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 31 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 35 },
       "fieldConfig": {
         "defaults": { "unit": "short" },
         "overrides": [
