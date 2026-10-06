@@ -19,20 +19,36 @@
     public_ip: '54.88.150.33'
     monitored_by: manual
 
-# ── Monitoring instance (i-0931669571a326fd4) ──────────────────────
+# ── Dev-server (i-0931669571a326fd4) ───────────────────────────────
 - targets:
-    - '54.92.186.206:9100'
+    - '172.31.44.186:9100'
   labels:
-    instance: 'Monitoring'
+    instance: 'Dev-server'
     instance_id: 'i-0931669571a326fd4'
     instance_type: 't3.micro'
-    env: production
+    env: dev
     region: us-east-1
     az: us-east-1d
     os: linux
-    public_ip: '54.92.186.206'
+    private_ip: '172.31.44.186'
+    public_ip: '98.93.172.39'
     monitored_by: manual
 
 # ── windows-server (i-00baf21d89dfb8504) ──────────────────────────
 # Windows Exporter on port 9182 — handled by windows-exporter job
 # See prometheus/targets/windows_nodes.yml
+
+# ── Add Windows to ec2-nodes for instance count panels ─────────────
+- targets:
+    - '172.31.42.217:9182'
+  labels:
+    instance: 'windows-server'
+    instance_id: 'i-00baf21d89dfb8504'
+    instance_type: 't3.xlarge'
+    env: production
+    region: us-east-1
+    az: us-east-1d
+    os: windows
+    private_ip: '172.31.42.217'
+    public_ip: '54.80.223.94'
+    monitored_by: manual

@@ -4,7 +4,7 @@
 # ══════════════════════════════════════════════════════════════════════
 
 - targets:
-    - '54.80.223.94:9182'
+    - '172.31.42.217:9182'
   labels:
     instance: 'windows-server'
     instance_id: 'i-00baf21d89dfb8504'
@@ -13,4 +13,6 @@
     region: us-east-1
     az: us-east-1d
     os: windows
+    private_ip: '172.31.42.217'
+    public_ip: '54.80.223.94'
     job: windows-exporter
