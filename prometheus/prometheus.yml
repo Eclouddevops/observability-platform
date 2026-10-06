@@ -36,9 +36,10 @@ scrape_configs:
   # ── CloudWatch Exporter ──────────────────────────────────────────
   # Already producing: aws_ec2_cpuutilization_average etc.
   # honor_labels: true keeps the job="aws_ec2" label set by the exporter
+  # scrape_interval 300s matches CloudWatch 5-min period — prevents staleness
   - job_name: 'cloudwatch'
-    scrape_interval: 60s
-    scrape_timeout: 55s
+    scrape_interval: 300s
+    scrape_timeout: 120s
     honor_labels: true
     static_configs:
       - targets: ['cloudwatch-exporter:9106']
@@ -111,22 +112,10 @@ scrape_configs:
     static_configs:
       - targets: ['ai-observability-agent:8888']
 
-  # ── EC2 Inventory (auto-discovery — ALL instances via CloudWatch) ──
-  # Written by ec2_state_sync every 2 min — no Node Exporter needed
-  - job_name: 'ec2-inventory'
-    scrape_interval: 60s
-    scrape_timeout: 55s
-    honor_labels: true
-    file_sd_configs:
-      - files:
-          - /etc/prometheus/targets/ec2_inventory.yml
-        refresh_interval: 30s
-    relabel_configs:
-      # Route all inventory targets through CloudWatch Exporter
-      - target_label: __address__
-        replacement: cloudwatch-exporter:9106
-
   # ── Auto-Discovery Agent ─────────────────────────────────────────
+  # Scrapes ec2_instance_state, ec2_running_total, ec2_stopped_total
+  # Updated every 30s via direct AWS EC2 API — instant state, no CloudWatch delay
   - job_name: 'auto-discovery'
+    scrape_interval: 30s
     static_configs:
       - targets: ['ec2-auto-discovery:9877']

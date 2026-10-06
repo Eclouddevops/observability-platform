@@ -197,7 +197,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "expr": "count(count by (instance_id) (max_over_time(aws_ec2_cpuutilization_average[10m]))) or vector(0)",
+          "expr": "ec2_running_total or count(count by (instance_id) (max_over_time(aws_ec2_cpuutilization_average[10m]))) or vector(0)",
           "legendFormat": "Running EC2"
         }
       ]

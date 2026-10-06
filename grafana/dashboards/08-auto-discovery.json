@@ -37,7 +37,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "Prometheus" },
-        "expr": "count(count by (instance_id) (max_over_time(aws_ec2_cpuutilization_average[10m]))) or vector(0)",
+        "expr": "ec2_running_total or count(count by (instance_id) (max_over_time(aws_ec2_cpuutilization_average[10m]))) or vector(0)",
         "legendFormat": "Running"
       }]
     },
@@ -69,7 +69,7 @@
 
     {
       "id": 4,
-      "title": "❌ Status Failed",
+      "title": "🔴 Stopped",
       "type": "stat",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
@@ -87,8 +87,8 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "Prometheus" },
-        "expr": "count(count by (instance_id) (max_over_time(aws_ec2_status_check_failed_sum[10m]) > 0)) or vector(0)",
-        "legendFormat": "Failed"
+        "expr": "ec2_stopped_total or vector(0)",
+        "legendFormat": "Stopped"
       }]
     },
 
@@ -205,6 +205,17 @@
         "defaults": { "custom": { "align": "left" } },
         "overrides": [
           {
+            "matcher": { "id": "byName", "options": "State" },
+            "properties": [
+              { "id": "custom.width", "value": 130 },
+              { "id": "custom.displayMode", "value": "color-background" },
+              { "id": "mappings", "value": [{ "type": "value", "options": {
+                "1": { "text": "🟢 Running", "color": "green", "index": 0 },
+                "0": { "text": "🔴 Stopped", "color": "red",   "index": 1 }
+              }}]}
+            ]
+          },
+          {
             "matcher": { "id": "byName", "options": "Health" },
             "properties": [
               { "id": "custom.width", "value": 140 },
@@ -257,6 +268,14 @@
           "legendFormat": ""
         },
         {
+          "refId": "State",
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "ec2_instance_state",
+          "instant": true,
+          "format": "table",
+          "legendFormat": ""
+        },
+        {
           "refId": "Health",
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
           "expr": "max by (instance_id) (max_over_time(aws_ec2_status_check_failed_sum[10m])) or (avg by (instance_id) (max_over_time(aws_ec2_cpuutilization_average[10m])) * 0)",
@@ -289,28 +308,34 @@
             "excludeByName": {
               "Time": true, "job": true, "__name__": true,
               "instance": true, "monitor": true, "environment": true,
-              "dimension_name": true, "dimension_value": true
+              "dimension_name": true, "dimension_value": true,
+              "account": true, "az": true, "os": true,
+              "instance_type": true, "env": true, "region": true
             },
             "renameByName": {
-              "instance_id":   "Instance ID",
-              "Value #CPU":    "CPU %",
-              "Value #Health": "Health",
-              "Value #NetIn":  "Network In",
-              "Value #NetOut": "Network Out"
+              "instance_id":      "Instance ID",
+              "instance_name":    "Name",
+              "Value #CPU":       "CPU %",
+              "Value #State":     "State",
+              "Value #Health":    "Health Check",
+              "Value #NetIn":     "Network In",
+              "Value #NetOut":    "Network Out"
             },
             "indexByName": {
-              "Instance ID": 0,
-              "Health":      1,
-              "CPU %":       2,
-              "Network In":  3,
-              "Network Out": 4
+              "Name":         0,
+              "Instance ID":  1,
+              "State":        2,
+              "CPU %":        3,
+              "Health Check": 4,
+              "Network In":   5,
+              "Network Out":  6
             }
           }
         },
         {
           "id": "filterByValue",
           "options": {
-            "filters": [{ "config": { "id": "isNull", "options": {} }, "fieldName": "CPU %", "type": "exclude" }],
+            "filters": [{ "config": { "id": "isNull", "options": {} }, "fieldName": "State", "type": "exclude" }],
             "match": "any",
             "type": "exclude"
           }
