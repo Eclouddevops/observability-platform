@@ -58,8 +58,8 @@
       },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "expr": "count(aws_ec2_cpuutilization_average) by (instance_id)",
-        "legendFormat": "{{ instance_id }}"
+        "expr": "count(aws_ec2_cpuutilization_average)",
+        "legendFormat": "Total Instances"
       }]
     },
 
