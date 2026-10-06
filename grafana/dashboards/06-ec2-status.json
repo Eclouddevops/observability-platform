@@ -60,7 +60,7 @@
       },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "expr": "count(aws_ec2_cpuutilization_average)",
+        "expr": "count(count by (instance_id) (aws_ec2_cpuutilization_average))",
         "legendFormat": "Total Instances"
       }]
     },
@@ -89,8 +89,8 @@
       },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "expr": "count(aws_ec2_status_check_failed_sum == 0) by (instance_id)",
-        "legendFormat": "{{ instance_id }}"
+        "expr": "count(count by (instance_id) (aws_ec2_status_check_failed_sum == 0)) or vector(0)",
+        "legendFormat": "Healthy"
       }]
     },
 
@@ -118,8 +118,8 @@
       },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "expr": "count(aws_ec2_status_check_failed_sum > 0) by (instance_id)",
-        "legendFormat": "{{ instance_id }}"
+        "expr": "count(count by (instance_id) (aws_ec2_status_check_failed_sum > 0)) or vector(0)",
+        "legendFormat": "Failed"
       }]
     },
 
