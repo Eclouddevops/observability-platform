@@ -37,7 +37,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "Prometheus" },
-        "expr": "count(count by (instance_id) (aws_ec2_cpuutilization_average)) or vector(0)",
+        "expr": "count(count by (instance_id) (max_over_time(aws_ec2_cpuutilization_average[10m]))) or vector(0)",
         "legendFormat": "Running"
       }]
     },
@@ -62,7 +62,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "Prometheus" },
-        "expr": "count(count by (instance_id) (aws_ec2_status_check_failed_sum == 0)) or vector(0)",
+        "expr": "count(count by (instance_id) (max_over_time(aws_ec2_status_check_failed_sum[10m]) == 0)) or vector(0)",
         "legendFormat": "Healthy"
       }]
     },
@@ -87,7 +87,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "none" },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "Prometheus" },
-        "expr": "count(count by (instance_id) (aws_ec2_status_check_failed_sum > 0)) or vector(0)",
+        "expr": "count(count by (instance_id) (max_over_time(aws_ec2_status_check_failed_sum[10m]) > 0)) or vector(0)",
         "legendFormat": "Failed"
       }]
     },
@@ -114,7 +114,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "Prometheus" },
-        "expr": "avg(avg by (instance_id) (aws_ec2_cpuutilization_average)) or vector(0)",
+        "expr": "avg(avg by (instance_id) (max_over_time(aws_ec2_cpuutilization_average[10m]))) or vector(0)",
         "legendFormat": "Avg CPU"
       }]
     },
@@ -251,7 +251,7 @@
         {
           "refId": "CPU",
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "avg by (instance_id) (aws_ec2_cpuutilization_average)",
+          "expr": "avg by (instance_id) (max_over_time(aws_ec2_cpuutilization_average[10m]))",
           "instant": true,
           "format": "table",
           "legendFormat": ""
@@ -259,7 +259,7 @@
         {
           "refId": "Health",
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "max by (instance_id) (aws_ec2_status_check_failed_sum) or (avg by (instance_id) (aws_ec2_cpuutilization_average) * 0)",
+          "expr": "max by (instance_id) (max_over_time(aws_ec2_status_check_failed_sum[10m])) or (avg by (instance_id) (max_over_time(aws_ec2_cpuutilization_average[10m])) * 0)",
           "instant": true,
           "format": "table",
           "legendFormat": ""
@@ -267,7 +267,7 @@
         {
           "refId": "NetIn",
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "max by (instance_id) (aws_ec2_network_in_sum) or (avg by (instance_id) (aws_ec2_cpuutilization_average) * 0)",
+          "expr": "max by (instance_id) (max_over_time(aws_ec2_network_in_sum[10m])) or (avg by (instance_id) (max_over_time(aws_ec2_cpuutilization_average[10m])) * 0)",
           "instant": true,
           "format": "table",
           "legendFormat": ""
@@ -275,7 +275,7 @@
         {
           "refId": "NetOut",
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "max by (instance_id) (aws_ec2_network_out_sum) or (avg by (instance_id) (aws_ec2_cpuutilization_average) * 0)",
+          "expr": "max by (instance_id) (max_over_time(aws_ec2_network_out_sum[10m])) or (avg by (instance_id) (max_over_time(aws_ec2_cpuutilization_average[10m])) * 0)",
           "instant": true,
           "format": "table",
           "legendFormat": ""
