@@ -114,9 +114,15 @@ def collect_and_write():
                 if is_running:
                     total_running += 1
 
+                # ── Stable label set (NO instance_name) ───────────────
+                # instance_id is the immutable, stable join key.
+                # We do NOT embed instance_name here because renaming an
+                # EC2 instance would create a brand-new Prometheus series
+                # (old name + new name both visible until retention expires).
+                # Instead, instance_name lives ONLY in the info metric below
+                # and is joined at query time via group_left.
                 lbl = _labels(
                     instance_id    = iid,
-                    instance_name  = name,
                     instance_type  = itype,
                     region         = region,
                     az             = az,
@@ -127,10 +133,27 @@ def collect_and_write():
                     public_ip      = pub,
                 )
 
-                # ── ec2_instance_info ──────────────────────────────
-                lines.append(f'# HELP ec2_instance_info EC2 instance metadata')
+                # ── ec2_instance_info — carries the current AWS Name tag ──
+                # This is an INFO metric: its value is always 1.
+                # Dashboards join on instance_id via group_left(instance_name)
+                # to get the current human-readable name without TSDB staleness.
+                # When the AWS Name tag changes, the NEXT collection run writes
+                # the new name here — Grafana reflects it immediately.
+                info_lbl = _labels(
+                    instance_id    = iid,
+                    instance_name  = name,      # AWS Name tag lives here only
+                    instance_type  = itype,
+                    region         = region,
+                    az             = az,
+                    os             = plat,
+                    env            = env,
+                    account        = ACCOUNT_NAME,
+                    private_ip     = priv,
+                    public_ip      = pub,
+                )
+                lines.append(f'# HELP ec2_instance_info EC2 instance metadata — join on instance_id to get current name')
                 lines.append(f'# TYPE ec2_instance_info gauge')
-                lines.append(f'ec2_instance_info{lbl} 1')
+                lines.append(f'ec2_instance_info{info_lbl} 1')
 
                 # ── ec2_instance_running ───────────────────────────
                 lines.append(f'ec2_instance_running{lbl} {is_running}')

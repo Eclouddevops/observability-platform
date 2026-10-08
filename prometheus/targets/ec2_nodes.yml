@@ -1,27 +1,26 @@
 # ══════════════════════════════════════════════════════════════════════
 # EC2 Node Exporter Targets
-# Auto-updated by auto-discovery agent every 2 minutes
-# Manual entries below as fallback
+# ──────────────────────────────────────────────────────────────────────
+# THIS FILE IS FULLY MANAGED BY THE AUTO-DISCOVERY AGENT.
+# Do NOT add manual entries here — they will cause ghost/duplicate
+# instance names on Grafana dashboards when EC2 instances are renamed.
+#
+# The auto-discovery agent rewrites this file every 2 minutes using
+# live AWS EC2 Name tags, ensuring Grafana always shows the current
+# instance name with no stale entries.
+#
+# If an instance is not appearing, check:
+#   1. Is Node Exporter running on port 9100?
+#   2. Is the instance reachable from the Prometheus host?
+#   3. Check auto-discovery agent logs: docker logs auto-discovery
 # ══════════════════════════════════════════════════════════════════════
 
 # ── observability-server (i-0b7b07809dc9007ac) ─────────────────────
 # Node Exporter runs on HOST (not Docker) via 172.18.0.1 gateway
 # Handled by node-exporter job in prometheus.yml — NOT here
 
-# ── Monitoring instance (i-0931669571a326fd4) ──────────────────────
-- targets:
-    - '54.92.186.206:9100'
-  labels:
-    instance: 'Monitoring'
-    instance_id: 'i-0931669571a326fd4'
-    instance_type: 't3.micro'
-    env: production
-    region: us-east-1
-    az: us-east-1d
-    os: linux
-    public_ip: '54.92.186.206'
-    monitored_by: manual
-
 # ── windows-server (i-00baf21d89dfb8504) ──────────────────────────
 # Windows Exporter on port 9182 — handled by windows-exporter job
 # See prometheus/targets/windows_nodes.yml
+
+# Auto-discovery agent will populate targets below on next run (every 2 min)

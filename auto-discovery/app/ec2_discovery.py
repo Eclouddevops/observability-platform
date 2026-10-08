@@ -206,57 +206,56 @@ fi
     # ── Prometheus Target File ────────────────────────────────────────
 
     def build_targets_yaml(self, instances: list[EC2Instance]) -> list[dict]:
-        """Build Prometheus file-SD YAML from discovered instances."""
-        # Group by region + env tag
-        groups: dict[tuple, list] = {}
-        for inst in instances:
+        """
+        Build Prometheus file-SD YAML from discovered instances.
+
+        Each instance gets exactly ONE entry with full per-instance labels.
+        The instance name is sourced live from the AWS EC2 Name tag on every
+        run — no hardcoded names, no stale caching.
+
+        NOTE: We deliberately do NOT write group-level entries alongside
+        per-instance entries for the same IP:port. Doing so creates duplicate
+        Prometheus targets with different label sets, which causes ghost/stale
+        instance names to appear on Grafana dashboards after a rename.
+        """
+        result = []
+        seen_targets: set[str] = set()
+
+        for inst in sorted(instances, key=lambda i: (i.region, i.display_name)):
             if not inst.node_exporter_up:
                 continue
-            env    = inst.tags.get("Environment", inst.tags.get("Env", "production"))
-            key    = (inst.region, env)
-            groups.setdefault(key, []).append(inst)
 
-        result = []
-        for (region, env), group in sorted(groups.items()):
-            targets = [i.target for i in group]
-            labels  = {
-                "env":       env,
-                "region":    region,
-                "job":       "ec2-nodes",
-                "monitored_by": "auto-discovery",
-            }
-            # Add per-instance labels via relabeling hint
+            # Skip duplicate targets (same IP:port) — last-write-wins is avoided
+            # by sorting deterministically above so the first occurrence is kept.
+            if inst.target in seen_targets:
+                logger.warning(
+                    "Duplicate target %s for instance %s (%s) — skipping",
+                    inst.target, inst.display_name, inst.instance_id
+                )
+                continue
+            seen_targets.add(inst.target)
+
+            env = inst.tags.get("Environment", inst.tags.get("Env", "production"))
+
+            # One entry per instance — name comes directly from the AWS Name tag.
+            # When the tag is updated in AWS, the next discovery run (every 2 min)
+            # will write the new name and Prometheus will reload automatically.
             result.append({
-                "targets": targets,
-                "labels":  labels
+                "targets": [inst.target],
+                "labels": {
+                    "instance":      inst.display_name,   # live AWS Name tag
+                    "instance_id":   inst.instance_id,    # immutable; stable join key
+                    "instance_type": inst.instance_type,
+                    "env":           env,
+                    "region":        inst.region,
+                    "az":            inst.az,
+                    "job":           "ec2-nodes",
+                    "monitored_by":  "auto-discovery",
+                }
             })
 
-            # Also write individual entries with instance name label
-            for inst in group:
-                result.append({
-                    "targets": [inst.target],
-                    "labels": {
-                        "instance":      inst.display_name,
-                        "instance_id":   inst.instance_id,
-                        "instance_type": inst.instance_type,
-                        "env":           env,
-                        "region":        region,
-                        "az":            inst.az,
-                        "job":           "ec2-nodes",
-                        "monitored_by":  "auto-discovery",
-                    }
-                })
-
-        # De-duplicate targets
-        seen = set()
-        deduped = []
-        for entry in result:
-            key = tuple(sorted(entry["targets"]))
-            if key not in seen:
-                seen.add(key)
-                deduped.append(entry)
-
-        return deduped
+        logger.info("Built %d unique per-instance targets", len(result))
+        return result
 
     def write_targets_file(self, yaml_data: list[dict]) -> bool:
         """Write the Prometheus file-SD targets YAML."""

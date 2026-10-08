@@ -2,20 +2,52 @@ groups:
   - name: ec2_cloudwatch_enrich
     interval: 60s
     rules:
-      # Add friendly instance names to CloudWatch metrics
-      # Uses the ec2-inventory job labels to join instance_id → name
+      # ──────────────────────────────────────────────────────────────
+      # EC2 CloudWatch Enrichment Recording Rules
+      # ──────────────────────────────────────────────────────────────
+      # All rules below JOIN CloudWatch metrics with ec2_instance_info
+      # via `instance_id` using group_left(instance_name).
+      #
+      # WHY: CloudWatch metrics only carry instance_id (immutable).
+      #      ec2_instance_info carries instance_name (the AWS Name tag)
+      #      and is refreshed every 2 minutes by the auto-discovery agent.
+      #
+      # RESULT: When an EC2 instance is renamed in AWS, the new name
+      #         appears on Grafana dashboards within ~2 minutes — no
+      #         manual intervention, no stale ghost names.
+      # ──────────────────────────────────────────────────────────────
+
+      # CPU utilization — enriched with current AWS instance name
       - record: ec2:cpu:average
         expr: |
           aws_ec2_cpuutilization_average
+          * on(instance_id) group_left(instance_name)
+          ec2_instance_info
 
+      # Status check failures — enriched with current AWS instance name
       - record: ec2:status_check:failed
         expr: |
           aws_ec2_status_check_failed_sum
+          * on(instance_id) group_left(instance_name)
+          ec2_instance_info
 
+      # Network in rate (5m) — enriched with current AWS instance name
       - record: ec2:network_in:rate5m
         expr: |
           rate(aws_ec2_network_in_sum[5m])
+          * on(instance_id) group_left(instance_name)
+          ec2_instance_info
 
+      # Network out rate (5m) — enriched with current AWS instance name
       - record: ec2:network_out:rate5m
         expr: |
           rate(aws_ec2_network_out_sum[5m])
+          * on(instance_id) group_left(instance_name)
+          ec2_instance_info
+
+      # ── Instance info snapshot (for dashboards that need name only) ─
+      # Provides a stable 1-minute-refreshed label set for variable
+      # dropdowns and table panels: select instance_name from this metric.
+      - record: ec2:instance:info
+        expr: |
+          ec2_instance_info
