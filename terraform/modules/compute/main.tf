@@ -156,14 +156,16 @@ resource "aws_autoscaling_group" "this" {
     version = "$Latest"
   }
 
-  # Attach to both ALB and NLB target groups
+  # Attach to ALB target group (NLB optional)
   target_group_arns = concat(
     [var.alb_target_group_arn],
     var.nlb_target_group_arn != "" ? [var.nlb_target_group_arn] : []
   )
 
-  health_check_type         = "ELB"
-  health_check_grace_period = 120
+  # Use EC2 health check during initial creation to avoid failures
+  # before the app is running. Change to ELB once app is deployed.
+  health_check_type         = "EC2"
+  health_check_grace_period = 300
 
   # Instance Refresh for rolling updates
   instance_refresh {
@@ -187,7 +189,7 @@ resource "aws_autoscaling_group" "this" {
 
   dynamic "tag" {
     for_each = merge(var.common_tags, {
-      Name        = "${local.name_prefix}-asg-instance"
+      Name        = "${local.name_prefix}-ec2"
       Environment = var.environment
     })
     content {
@@ -199,7 +201,7 @@ resource "aws_autoscaling_group" "this" {
 
   lifecycle {
     create_before_destroy = true
-    ignore_changes        = [desired_capacity]   # allow external scaling without drift
+    ignore_changes        = [desired_capacity]
   }
 }
 
