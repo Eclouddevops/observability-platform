@@ -47,9 +47,9 @@ resource "aws_db_instance" "this" {
   # Naming
   identifier = "${var.env_name}-postgres"
 
-  # Engine — postgres 16.3 is stable and available in ap-south-1
+  # Engine — postgres 16.9 confirmed available in ap-south-1
   engine         = "postgres"
-  engine_version = "16.3"
+  engine_version = "16.9"
   instance_class = var.instance_class
 
   # Storage
