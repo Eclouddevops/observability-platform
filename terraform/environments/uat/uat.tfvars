@@ -15,13 +15,13 @@ public_subnet_cidrs  = ["10.0.100.0/24", "10.0.101.0/24", "10.0.102.0/24"]
 private_subnet_cidrs = ["10.0.110.0/24", "10.0.111.0/24", "10.0.112.0/24"]
 
 # Compute
-instance_type        = "t2.micro"
+instance_type        = "t3.micro"
 ami_id               = ""
-asg_desired_capacity = 4
-asg_min_size         = 2
+asg_desired_capacity = 1
+asg_min_size         = 1
 asg_max_size         = 8
 app_port             = 80
-health_check_path    = "/"
+health_check_path    = "/health"
 
 # RDS
 rds_instance_class    = "db.t3.micro"
