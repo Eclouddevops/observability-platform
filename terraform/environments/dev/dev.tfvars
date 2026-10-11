@@ -8,9 +8,9 @@ aws_account_id = "496251222247"
 
 # New VPC — fully isolated from UAT
 vpc_cidr             = "10.1.0.0/16"
-availability_zones   = ["ap-south-1a", "ap-south-1b"]
-public_subnet_cidrs  = ["10.1.10.0/24", "10.1.11.0/24"]
-private_subnet_cidrs = ["10.1.20.0/24", "10.1.21.0/24"]
+availability_zones   = ["ap-south-1a", "ap-south-1b", "ap-south-1c"]
+public_subnet_cidrs  = ["10.1.10.0/24", "10.1.11.0/24", "10.1.12.0/24"]
+private_subnet_cidrs = ["10.1.20.0/24", "10.1.21.0/24", "10.1.22.0/24"]
 
 # Compute
 instance_type        = "t2.micro"

@@ -123,6 +123,10 @@ resource "aws_cloudwatch_log_group" "flow_logs" {
   name              = "/aws/vpc/${var.env_name}-flow-logs"
   retention_in_days = 30
   tags              = var.common_tags
+
+  lifecycle {
+    ignore_changes = [name]
+  }
 }
 
 resource "aws_iam_role" "flow_log" {
