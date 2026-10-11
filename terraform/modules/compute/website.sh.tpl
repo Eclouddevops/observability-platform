@@ -1,143 +1,215 @@
 #!/bin/bash
 ###############################################################################
 # website.sh.tpl
-# Runs ONCE on every EC2 instance launched by the ASG.
-# Installs Nginx, writes the website, registers with ALB automatically.
+# Runs on every EC2 instance launched by the ASG
+# - Installs Apache (httpd)
+# - Writes UAT or DEV specific website
+# - /health endpoint for ALB health check
+# - /info   endpoint for instance metadata
+# - /load   endpoint to check load test status
+# - Installs stress tool for CPU/Memory load testing
 ###############################################################################
 set -euo pipefail
 exec > /var/log/userdata.log 2>&1
 echo "Bootstrap started: ${env_name} at $(date -u)"
 
-# ── Packages ──────────────────────────────────────────────────────────────────
+###############################################################################
+# 1 — Packages
+###############################################################################
 dnf update -y
-dnf install -y nginx amazon-cloudwatch-agent aws-cli jq python3
+dnf install -y httpd amazon-cloudwatch-agent aws-cli jq python3 stress-ng
 
-# ── Instance Metadata (IMDSv2) ────────────────────────────────────────────────
+###############################################################################
+# 2 — Instance Metadata (IMDSv2)
+###############################################################################
 TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" \
         -H "X-aws-ec2-metadata-token-ttl-seconds: 21600" 2>/dev/null || echo "")
+
 INSTANCE_ID=$(curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" \
   http://169.254.169.254/latest/meta-data/instance-id 2>/dev/null || echo "unknown")
 AZ=$(curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" \
   http://169.254.169.254/latest/meta-data/placement/availability-zone 2>/dev/null || echo "unknown")
 PRIVATE_IP=$(curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" \
   http://169.254.169.254/latest/meta-data/local-ipv4 2>/dev/null || echo "unknown")
+INSTANCE_TYPE=$(curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/instance-type 2>/dev/null || echo "unknown")
 
-echo "Instance: $INSTANCE_ID | AZ: $AZ | IP: $PRIVATE_IP"
+echo "Instance: $INSTANCE_ID | AZ: $AZ | IP: $PRIVATE_IP | Type: $INSTANCE_TYPE"
 
-# ── App env file ──────────────────────────────────────────────────────────────
-mkdir -p /etc/app
-cat > /etc/app/env <<ENVFILE
-ENVIRONMENT=${environment}
-ENV_NAME=${env_name}
-AWS_REGION=${aws_region}
-INSTANCE_ID=$INSTANCE_ID
-AZ=$AZ
-PRIVATE_IP=$PRIVATE_IP
-ENVFILE
-chmod 600 /etc/app/env
+###############################################################################
+# 3 — Environment-specific variables
+###############################################################################
+ENV_UPPER=$(echo "${environment}" | tr '[:lower:]' '[:upper:]')
 
-# ── Website HTML ──────────────────────────────────────────────────────────────
-mkdir -p /usr/share/nginx/html
-cat > /usr/share/nginx/html/index.html <<'HTML'
+# Colour theme per environment
+if [[ "${environment}" == "uat" ]]; then
+  ENV_COLOR="#7c3aed"        # purple for UAT
+  ENV_BADGE_COLOR="#ede9fe"
+  ENV_ACCENT="#a78bfa"
+  ENV_BORDER="rgba(124,58,237,0.4)"
+  ENV_BG="linear-gradient(135deg,#1e0a3c 0%,#2d1b69 45%,#0d0b26 100%)"
+else
+  ENV_COLOR="#0369a1"        # blue for DEV
+  ENV_BADGE_COLOR="#e0f2fe"
+  ENV_ACCENT="#38bdf8"
+  ENV_BORDER="rgba(3,105,161,0.4)"
+  ENV_BG="linear-gradient(135deg,#0a1628 0%,#0c2340 45%,#060d1a 100%)"
+fi
+
+###############################################################################
+# 4 — Write Apache config
+###############################################################################
+cat > /etc/httpd/conf.d/website.conf <<'APACHECONF'
+ServerName localhost
+
+<VirtualHost *:80>
+    DocumentRoot /var/www/html
+    DirectoryIndex index.html
+
+    # ALB health check
+    <Location /health>
+        SetHandler default-handler
+    </Location>
+
+    # Pass /info to Python backend
+    ProxyPass        /info http://127.0.0.1:8081/info
+    ProxyPassReverse /info http://127.0.0.1:8081/info
+
+    # Pass /load-status to Python backend
+    ProxyPass        /load-status http://127.0.0.1:8081/load-status
+    ProxyPassReverse /load-status http://127.0.0.1:8081/load-status
+
+    <Directory /var/www/html>
+        Options -Indexes
+        AllowOverride None
+        Require all granted
+    </Directory>
+
+    ErrorLog  /var/log/httpd/error.log
+    CustomLog /var/log/httpd/access.log combined
+</VirtualHost>
+APACHECONF
+
+# Enable proxy modules
+sed -i 's/#LoadModule proxy_module/LoadModule proxy_module/' \
+  /etc/httpd/conf.modules.d/*.conf 2>/dev/null || true
+echo "LoadModule proxy_module modules/mod_proxy.so"    >> /etc/httpd/conf/httpd.conf 2>/dev/null || true
+echo "LoadModule proxy_http_module modules/mod_proxy_http.so" >> /etc/httpd/conf/httpd.conf 2>/dev/null || true
+
+###############################################################################
+# 5 — Health check file
+###############################################################################
+echo "healthy" > /var/www/html/health
+
+###############################################################################
+# 6 — Main Website HTML
+###############################################################################
+cat > /var/www/html/index.html <<HTML
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>AI-Powered Infrastructure Monitoring</title>
+  <title>Welcome to ${ENV_UPPER} - AI-Powered Infrastructure Monitoring</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{
       font-family:'Segoe UI',system-ui,sans-serif;
-      background:linear-gradient(135deg,#0a0a1a 0%,#1a1040 45%,#0d1b2a 100%);
+      background:${ENV_BG};
       min-height:100vh;color:#fff;
-      display:flex;flex-direction:column;align-items:center;
-      justify-content:center;padding:40px 20px;
+      display:flex;flex-direction:column;
+      align-items:center;justify-content:center;
+      padding:40px 20px;
     }
-    /* top banner */
-    .banner{
+    .top-banner{
       width:100%;max-width:1000px;
       background:rgba(34,197,94,.12);
-      border:1px solid rgba(34,197,94,.3);
+      border:1px solid rgba(34,197,94,.35);
       border-radius:10px;padding:12px 24px;
-      margin-bottom:40px;font-size:13px;
+      margin-bottom:36px;font-size:13px;
       color:#86efac;text-align:center;
     }
-    .banner strong{color:#fff}
-    /* hero */
-    .hero{text-align:center;max-width:760px;margin-bottom:48px}
+    .top-banner strong{color:#fff}
+    .env-pill{
+      display:inline-block;
+      background:${ENV_COLOR};
+      color:#fff;padding:3px 14px;
+      border-radius:50px;font-size:12px;
+      font-weight:700;letter-spacing:1px;
+      margin-left:8px;text-transform:uppercase;
+    }
+    .hero{text-align:center;max-width:760px;margin-bottom:44px}
     .badge{
       display:inline-block;
-      background:rgba(99,102,241,.2);border:1px solid rgba(99,102,241,.4);
-      color:#a5b4fc;padding:5px 20px;border-radius:50px;
-      font-size:12px;letter-spacing:2px;text-transform:uppercase;margin-bottom:22px;
+      background:rgba(255,255,255,.1);
+      border:1px solid ${ENV_BORDER};
+      color:${ENV_ACCENT};
+      padding:5px 20px;border-radius:50px;
+      font-size:12px;letter-spacing:2px;
+      text-transform:uppercase;margin-bottom:20px;
     }
     h1{
-      font-size:clamp(2rem,5vw,3.2rem);font-weight:800;line-height:1.15;margin-bottom:18px;
-      background:linear-gradient(135deg,#fff 0%,#a5b4fc 55%,#67e8f9 100%);
-      -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+      font-size:clamp(1.9rem,4.5vw,3rem);
+      font-weight:800;line-height:1.15;margin-bottom:16px;
+      background:linear-gradient(135deg,#fff 0%,${ENV_ACCENT} 100%);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+      background-clip:text;
     }
-    .sub{font-size:clamp(.95rem,2vw,1.1rem);color:#94a3b8;line-height:1.8;max-width:600px;margin:0 auto 14px}
-    .note{font-size:.82rem;color:#475569}
-    .note span{color:#22c55e;font-weight:600}
-    /* cards */
+    .sub{font-size:clamp(.9rem,2vw,1.08rem);color:#94a3b8;line-height:1.8;max-width:600px;margin:0 auto 12px}
     .cards{
-      display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
-      gap:18px;max-width:1000px;width:100%;margin-bottom:36px;
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+      gap:16px;max-width:1000px;width:100%;margin-bottom:32px;
     }
     .card{
-      background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);
-      border-radius:16px;padding:28px 20px;
-      transition:transform .3s,border-color .3s,background .3s;
+      background:rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:16px;padding:26px 18px;
+      transition:transform .3s,border-color .3s;
     }
-    .card:hover{transform:translateY(-4px);border-color:rgba(99,102,241,.4);background:rgba(99,102,241,.08)}
-    .icon{font-size:2.2rem;margin-bottom:12px}
-    .ct{font-size:.95rem;font-weight:700;color:#e2e8f0;margin-bottom:7px}
-    .cd{font-size:.8rem;color:#64748b;line-height:1.6}
-    /* instance info */
-    .info{
-      display:flex;flex-wrap:wrap;justify-content:center;gap:22px;
+    .card:hover{transform:translateY(-4px);border-color:${ENV_BORDER}}
+    .icon{font-size:2rem;margin-bottom:10px}
+    .ct{font-size:.92rem;font-weight:700;color:#e2e8f0;margin-bottom:6px}
+    .cd{font-size:.78rem;color:#64748b;line-height:1.55}
+    .info-bar{
+      display:flex;flex-wrap:wrap;justify-content:center;gap:20px;
       max-width:1000px;width:100%;
-      background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);
-      border-radius:14px;padding:22px 28px;margin-bottom:28px;
+      background:rgba(255,255,255,.03);
+      border:1px solid rgba(255,255,255,.07);
+      border-radius:14px;padding:20px 26px;margin-bottom:24px;
     }
-    .ii{text-align:center;min-width:120px}
-    .il{font-size:.68rem;text-transform:uppercase;letter-spacing:1.5px;color:#475569;margin-bottom:5px}
-    .iv{font-size:.88rem;font-weight:600;color:#a5b4fc;word-break:break-all}
+    .ii{text-align:center;min-width:110px}
+    .il{font-size:.67rem;text-transform:uppercase;letter-spacing:1.5px;color:#475569;margin-bottom:4px}
+    .iv{font-size:.86rem;font-weight:600;color:${ENV_ACCENT};word-break:break-all}
     .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:4px;animation:blink 2s infinite}
     @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
-    /* scaling */
-    .sc-wrap{max-width:1000px;width:100%;margin-bottom:28px}
-    .sc-title{font-size:.7rem;text-transform:uppercase;letter-spacing:2px;color:#475569;text-align:center;margin-bottom:12px}
-    .sc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(195px,1fr));gap:10px}
-    .sc-row{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:13px 16px}
-    .sp{font-size:1rem;font-weight:800;min-width:52px}
+    .scale-section{max-width:1000px;width:100%;margin-bottom:24px}
+    .scale-title{font-size:.68rem;text-transform:uppercase;letter-spacing:2px;color:#475569;text-align:center;margin-bottom:10px}
+    .scale-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:9px}
+    .sr{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:9px;padding:12px 14px}
+    .sp{font-size:.95rem;font-weight:800;min-width:50px}
     .sp.g{color:#22c55e}.sp.y{color:#eab308}.sp.o{color:#f97316}.sp.r{color:#ef4444}
-    .st{font-size:.78rem;color:#94a3b8;line-height:1.4}
+    .st{font-size:.76rem;color:#94a3b8;line-height:1.4}
     .st strong{color:#e2e8f0}
-    footer{font-size:.72rem;color:#334155;text-align:center}
+    footer{font-size:.7rem;color:#334155;text-align:center;margin-top:4px}
   </style>
 </head>
 <body>
 
-  <div class="banner">
+  <div class="top-banner">
     <strong>✅ This webpage is configured on EC2 instances</strong>
-    &nbsp;·&nbsp; Served by Nginx
+    &nbsp;·&nbsp; Environment: <span class="env-pill">${ENV_UPPER}</span>
+    &nbsp;·&nbsp; Served by Apache httpd
     &nbsp;·&nbsp; Registered with Application Load Balancer
-    &nbsp;·&nbsp; Managed by Auto Scaling Group
+    &nbsp;·&nbsp; Managed by Auto Scaling Group (min=1, max=8)
   </div>
 
   <div class="hero">
-    <div class="badge">🤖 AI-Powered Platform</div>
-    <h1>Welcome to AI-Powered<br/>Infrastructure Monitoring</h1>
+    <div class="badge">🤖 ${ENV_UPPER} Environment</div>
+    <h1>Welcome to ${ENV_UPPER} AI-Powered<br/>Infrastructure Monitoring</h1>
     <p class="sub">
       Make Your Infrastructure Feel Fantastic with AI-Driven Insights,
       Smart Automation, and Real-Time Observability.
-    </p>
-    <p class="note">
-      <span>●</span> Running on AWS EC2
-      &nbsp;·&nbsp; Auto-registered with ALB
-      &nbsp;·&nbsp; Discovered by Prometheus
     </p>
   </div>
 
@@ -150,17 +222,17 @@ cat > /usr/share/nginx/html/index.html <<'HTML'
     <div class="card">
       <div class="icon">📊</div>
       <div class="ct">Real-Time Metrics</div>
-      <div class="cd">Live dashboards powered by Prometheus and Grafana</div>
+      <div class="cd">Live dashboards via Prometheus and Grafana</div>
     </div>
     <div class="card">
       <div class="icon">⚡</div>
       <div class="ct">Auto Scaling</div>
-      <div class="cd">CPU and memory-driven elastic scaling — 1 to 8 instances</div>
+      <div class="cd">CPU and memory-driven scaling — 1 to 8 instances</div>
     </div>
     <div class="card">
       <div class="icon">🌐</div>
       <div class="ct">Application Load Balancer</div>
-      <div class="cd">ALB distributes traffic across all healthy instances</div>
+      <div class="cd">ALB routes traffic across all healthy EC2 instances</div>
     </div>
     <div class="card">
       <div class="icon">🔒</div>
@@ -174,46 +246,27 @@ cat > /usr/share/nginx/html/index.html <<'HTML'
     </div>
   </div>
 
-  <div class="info">
-    <div class="ii">
-      <div class="il">Status</div>
-      <div class="iv"><span class="dot"></span>Healthy</div>
-    </div>
-    <div class="ii">
-      <div class="il">Environment</div>
-      <div class="iv" id="e-env">…</div>
-    </div>
-    <div class="ii">
-      <div class="il">Instance ID</div>
-      <div class="iv" id="e-iid">…</div>
-    </div>
-    <div class="ii">
-      <div class="il">Availability Zone</div>
-      <div class="iv" id="e-az">…</div>
-    </div>
-    <div class="ii">
-      <div class="il">Private IP</div>
-      <div class="iv" id="e-ip">…</div>
-    </div>
-    <div class="ii">
-      <div class="il">Region</div>
-      <div class="iv" id="e-region">…</div>
-    </div>
+  <div class="info-bar">
+    <div class="ii"><div class="il">Status</div><div class="iv"><span class="dot"></span>Healthy</div></div>
+    <div class="ii"><div class="il">Environment</div><div class="iv" id="e-env">…</div></div>
+    <div class="ii"><div class="il">Instance ID</div><div class="iv" id="e-iid">…</div></div>
+    <div class="ii"><div class="il">Availability Zone</div><div class="iv" id="e-az">…</div></div>
+    <div class="ii"><div class="il">Private IP</div><div class="iv" id="e-ip">…</div></div>
+    <div class="ii"><div class="il">Region</div><div class="iv" id="e-region">…</div></div>
   </div>
 
-  <div class="sc-wrap">
-    <div class="sc-title">⚡ Auto Scaling Policy — CPU &amp; Memory Thresholds</div>
-    <div class="sc-grid">
-      <div class="sc-row"><div class="sp g">≤ 20%</div><div class="st"><strong>Scale In</strong> — remove 1 instance</div></div>
-      <div class="sc-row"><div class="sp y">70–80%</div><div class="st"><strong>Scale Out</strong> — add +1 instance</div></div>
-      <div class="sc-row"><div class="sp o">80–90%</div><div class="st"><strong>Scale Out</strong> — add +2 instances</div></div>
-      <div class="sc-row"><div class="sp r">≥ 90%</div><div class="st"><strong>Scale Out</strong> — add +4 instances (max 8)</div></div>
+  <div class="scale-section">
+    <div class="scale-title">⚡ Auto Scaling Policy — CPU &amp; Memory Thresholds</div>
+    <div class="scale-grid">
+      <div class="sr"><div class="sp g">≤ 20%</div><div class="st"><strong>Scale In</strong> — remove 1 instance</div></div>
+      <div class="sr"><div class="sp y">70–80%</div><div class="st"><strong>Scale Out</strong> — add +1 instance</div></div>
+      <div class="sr"><div class="sp o">80–90%</div><div class="st"><strong>Scale Out</strong> — add +2 instances</div></div>
+      <div class="sr"><div class="sp r">≥ 90%</div><div class="st"><strong>Scale Out</strong> — add +4 instances (max 8)</div></div>
     </div>
   </div>
 
   <footer>
-    Observability Platform &nbsp;·&nbsp; AWS EC2 &nbsp;·&nbsp;
-    Terraform &nbsp;·&nbsp; Prometheus &nbsp;·&nbsp; Grafana &nbsp;·&nbsp; ALB
+    ${ENV_UPPER} · Apache httpd · AWS EC2 · Terraform · Prometheus · Grafana · ALB
   </footer>
 
   <script>
@@ -232,28 +285,57 @@ cat > /usr/share/nginx/html/index.html <<'HTML'
 </html>
 HTML
 
-# ── Info endpoint (Python, port 8081) ─────────────────────────────────────────
-cat > /usr/local/bin/infoserver.py <<PYEOF
+###############################################################################
+# 7 — Info + load-status API (Python on 127.0.0.1:8081)
+###############################################################################
+mkdir -p /etc/app
+cat > /etc/app/env <<ENVFILE
+ENVIRONMENT=${environment}
+ENV_NAME=${env_name}
+AWS_REGION=${aws_region}
+INSTANCE_ID=$INSTANCE_ID
+AZ=$AZ
+PRIVATE_IP=$PRIVATE_IP
+INSTANCE_TYPE=$INSTANCE_TYPE
+ENVFILE
+chmod 600 /etc/app/env
+
+cat > /usr/local/bin/infoserver.py <<'PYEOF'
 #!/usr/bin/env python3
-import http.server, json, os
+import http.server, json, os, subprocess
+
 class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        body = json.dumps({
-            "status":      "healthy",
-            "environment": os.getenv("ENVIRONMENT","unknown"),
-            "env_name":    os.getenv("ENV_NAME","unknown"),
-            "instance_id": os.getenv("INSTANCE_ID","unknown"),
-            "az":          os.getenv("AZ","unknown"),
-            "private_ip":  os.getenv("PRIVATE_IP","unknown"),
-            "region":      os.getenv("AWS_REGION","unknown")
-        }).encode()
+        if self.path == '/info':
+            body = json.dumps({
+                "status":        "healthy",
+                "environment":   os.getenv("ENVIRONMENT",   "unknown"),
+                "env_name":      os.getenv("ENV_NAME",      "unknown"),
+                "instance_id":   os.getenv("INSTANCE_ID",  "unknown"),
+                "az":            os.getenv("AZ",            "unknown"),
+                "private_ip":    os.getenv("PRIVATE_IP",   "unknown"),
+                "instance_type": os.getenv("INSTANCE_TYPE","unknown"),
+                "region":        os.getenv("AWS_REGION",   "unknown")
+            }).encode()
+        elif self.path == '/load-status':
+            r = subprocess.run(["pgrep","-c","stress-ng"],
+                               capture_output=True, text=True)
+            running = r.returncode == 0
+            body = json.dumps({
+                "stress_running": running,
+                "process_count":  r.stdout.strip() if running else "0"
+            }).encode()
+        else:
+            body = b'{"error":"not found"}'
         self.send_response(200)
         self.send_header("Content-Type","application/json")
         self.send_header("Access-Control-Allow-Origin","*")
         self.end_headers()
         self.wfile.write(body)
-    def log_message(self,*a): pass
-http.server.HTTPServer(("127.0.0.1",8081),H).serve_forever()
+
+    def log_message(self, *a): pass
+
+http.server.HTTPServer(("127.0.0.1", 8081), H).serve_forever()
 PYEOF
 chmod +x /usr/local/bin/infoserver.py
 
@@ -271,42 +353,85 @@ RestartSec=3
 WantedBy=multi-user.target
 SVC
 
-# ── Nginx config ──────────────────────────────────────────────────────────────
-cat > /etc/nginx/nginx.conf <<'NGINXEOF'
-user nginx;
-worker_processes auto;
-error_log /var/log/nginx/error.log warn;
-pid /run/nginx.pid;
-events { worker_connections 1024; }
-http {
-    include       /etc/nginx/mime.types;
-    default_type  application/octet-stream;
-    sendfile on;
-    keepalive_timeout 65;
-    server_tokens off;
-    server {
-        listen 80 default_server;
-        server_name _;
-        root /usr/share/nginx/html;
-        index index.html;
-        location /health {
-            access_log off;
-            return 200 "healthy\n";
-            add_header Content-Type text/plain;
-        }
-        location /info {
-            proxy_pass http://127.0.0.1:8081;
-            proxy_set_header Host $host;
-            proxy_read_timeout 5s;
-        }
-        location / {
-            try_files $uri $uri/ /index.html;
-        }
-    }
-}
-NGINXEOF
+###############################################################################
+# 8 — Load test script: /usr/local/bin/load-test.sh
+#     Usage: load-test.sh 70   → stress CPU+Memory to ~70%
+#            load-test.sh 80   → stress CPU+Memory to ~80%
+#            load-test.sh 90   → stress CPU+Memory to ~90%
+#            load-test.sh stop → stop all stress processes
+###############################################################################
+cat > /usr/local/bin/load-test.sh <<'LOADEOF'
+#!/bin/bash
+###############################################################################
+# load-test.sh — Simulate CPU + Memory load to test ASG scaling
+# Usage: ./load-test.sh [70|80|90|stop]
+###############################################################################
+LEVEL=${1:-70}
+NCPU=$(nproc)
+TOTAL_MEM_MB=$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)
 
-# ── CloudWatch Agent (memory + disk metrics) ──────────────────────────────────
+case "$LEVEL" in
+  stop)
+    echo "Stopping all stress-ng processes..."
+    pkill -f stress-ng 2>/dev/null || true
+    echo "Done. Load stopped."
+    exit 0
+    ;;
+  70)
+    CPU_LOAD=70
+    MEM_PCT=70
+    DURATION=300   # 5 minutes
+    ;;
+  80)
+    CPU_LOAD=80
+    MEM_PCT=80
+    DURATION=300
+    ;;
+  90)
+    CPU_LOAD=90
+    MEM_PCT=90
+    DURATION=300
+    ;;
+  *)
+    echo "Usage: $0 [70|80|90|stop]"
+    exit 1
+    ;;
+esac
+
+MEM_MB=$(( TOTAL_MEM_MB * MEM_PCT / 100 ))
+
+echo "========================================================"
+echo "  Load Test: $LEVEL%"
+echo "  CPUs      : $NCPU cores at $CPU_LOAD% each"
+echo "  Memory    : ${MEM_MB}MB / ${TOTAL_MEM_MB}MB ($MEM_PCT%)"
+echo "  Duration  : ${DURATION}s"
+echo "  Stop with : $0 stop"
+echo "========================================================"
+
+# Stop any existing stress
+pkill -f stress-ng 2>/dev/null || true
+sleep 2
+
+# Run stress in background
+nohup stress-ng \
+  --cpu   $NCPU \
+  --cpu-load $CPU_LOAD \
+  --vm 1 \
+  --vm-bytes ${MEM_MB}M \
+  --timeout ${DURATION}s \
+  --metrics-brief \
+  > /var/log/load-test.log 2>&1 &
+
+echo "Stress PID: $!"
+echo "Monitoring: watch -n5 'cat /proc/loadavg && free -m'"
+echo "CloudWatch will detect high CPU/Memory in ~2 minutes"
+echo "ASG will scale out automatically"
+LOADEOF
+chmod +x /usr/local/bin/load-test.sh
+
+###############################################################################
+# 9 — CloudWatch Agent config (memory + disk metrics)
+###############################################################################
 mkdir -p /opt/aws/amazon-cloudwatch-agent/etc
 cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<CWEOF
 {
@@ -326,8 +451,8 @@ cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<CWEOF
     "logs_collected": {
       "files": {
         "collect_list": [
-          { "file_path": "/var/log/nginx/access.log", "log_group_name": "/aws/ec2/${env_name}/nginx/access", "log_stream_name": "{instance_id}" },
-          { "file_path": "/var/log/nginx/error.log",  "log_group_name": "/aws/ec2/${env_name}/nginx/error",  "log_stream_name": "{instance_id}" }
+          { "file_path": "/var/log/httpd/access_log", "log_group_name": "/aws/ec2/${env_name}/apache/access", "log_stream_name": "{instance_id}" },
+          { "file_path": "/var/log/httpd/error_log",  "log_group_name": "/aws/ec2/${env_name}/apache/error",  "log_stream_name": "{instance_id}" }
         ]
       }
     }
@@ -335,14 +460,23 @@ cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<CWEOF
 }
 CWEOF
 
-# ── Start services ────────────────────────────────────────────────────────────
+###############################################################################
+# 10 — Start all services
+###############################################################################
 systemctl daemon-reload
-systemctl enable nginx infoserver amazon-cloudwatch-agent
-systemctl start  nginx infoserver amazon-cloudwatch-agent
+systemctl enable httpd infoserver amazon-cloudwatch-agent
+systemctl start  httpd infoserver amazon-cloudwatch-agent
 
-sleep 2
+sleep 3
 curl -sf http://localhost/health | grep -q healthy \
-  && echo "✅ Nginx OK" \
-  || echo "❌ Nginx FAILED — check /var/log/nginx/error.log"
+  && echo "✅ Apache health check: PASSED" \
+  || echo "❌ Apache health check: FAILED"
 
-echo "Bootstrap complete: ${env_name} | $INSTANCE_ID | $AZ"
+echo "======================================================"
+echo " Bootstrap complete : ${env_name}"
+echo " Instance           : $INSTANCE_ID"
+echo " AZ                 : $AZ"
+echo " Website            : http://<ALB-DNS>/"
+echo " Health check       : http://<ALB-DNS>/health"
+echo " Load test          : sudo load-test.sh [70|80|90|stop]"
+echo "======================================================"
