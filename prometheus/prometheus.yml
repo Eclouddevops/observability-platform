@@ -1,9 +1,16 @@
+###############################################################################
+# Prometheus Configuration
+# Covers: obs-uat + obs-dev environments in ap-south-1 (Mumbai)
+# Account: 496251222247
+###############################################################################
+
 global:
-  scrape_interval: 30s
+  scrape_interval:     30s
   evaluation_interval: 30s
   external_labels:
-    monitor: 'observability-platform'
-    environment: 'production'
+    monitor:     'observability-platform'
+    region:      'ap-south-1'
+    account:     '496251222247'
 
 alerting:
   alertmanagers:
@@ -15,53 +22,62 @@ rule_files:
 
 scrape_configs:
 
-  # ── Prometheus self ──────────────────────────────────────────────
+  # ── Prometheus self ──────────────────────────────────────────────────────
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
+        labels:
+          component: 'prometheus'
 
-  # ── Node Exporter container ───────────────────────────────────────
-  # Reads /textfiles/ec2_metrics.prom via textfile_collector
-  # ec2_metrics.prom contains ALL UAT + DEV EC2 metrics auto-discovered
+  # ── Node Exporter ─────────────────────────────────────────────────────────
+  # IMPORTANT: also reads /textfiles/ec2_metrics.prom via textfile_collector
+  # This file is written by ec2-auto-discovery every 2 minutes and contains
+  # all obs-uat-ec2 and obs-dev-ec2 instance metrics automatically.
   - job_name: 'node-exporter'
     static_configs:
       - targets: ['node-exporter:9100']
         labels:
-          instance: 'observability-server'
+          instance:   'observability-server'
+          component:  'node-exporter'
 
-  # ── cAdvisor ─────────────────────────────────────────────────────
+  # ── cAdvisor ─────────────────────────────────────────────────────────────
   - job_name: 'cadvisor'
     static_configs:
       - targets: ['cadvisor:8080']
+        labels:
+          component: 'cadvisor'
 
-  # ── CloudWatch Exporter — ap-south-1 (UAT + DEV) ─────────────────
-  # Produces aws_ec2_* ALB, RDS, ASG metrics from Mumbai region
+  # ── CloudWatch Exporter ───────────────────────────────────────────────────
+  # Scrapes AWS CloudWatch metrics for:
+  #   EC2:           obs-uat-ec2, obs-dev-ec2 instances
+  #   ASG:           obs-uat-asg, obs-dev-asg
+  #   ALB:           obs-uat-alb, obs-dev-alb
+  #   NLB:           obs-uat-nlb, obs-dev-nlb
+  #   RDS:           obs-uat-postgres, obs-dev-postgres
   - job_name: 'cloudwatch'
     scrape_interval: 60s
-    scrape_timeout: 55s
-    honor_labels: true
+    scrape_timeout:  55s
+    honor_labels:    true
     static_configs:
       - targets: ['cloudwatch-exporter:9106']
+        labels:
+          component: 'cloudwatch'
+          region:    'ap-south-1'
 
-  # ── Blackbox HTTP probing — general websites ──────────────────────
-  - job_name: 'blackbox-http'
-    metrics_path: /probe
-    params:
-      module: [http_2xx]
-    file_sd_configs:
-      - files:
-          - /etc/prometheus/targets/websites.yml
-        refresh_interval: 30s
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: __param_target
-      - source_labels: [__param_target]
-        target_label: instance
-      - target_label: __address__
-        replacement: blackbox-exporter:9115
+  # ── EC2 Auto-Discovery Agent ───────────────────────────────────────────────
+  # Scans ap-south-1 every 2 minutes for all ManagedBy=terraform instances
+  # Writes ec2_metrics.prom with labels:
+  #   env="uat"  → obs-uat-ec2 × 4
+  #   env="dev"  → obs-dev-ec2 × 4
+  # Metrics: ec2_instance_running, ec2_cpu_percent, ec2_network_in/out_bytes
+  - job_name: 'auto-discovery'
+    static_configs:
+      - targets: ['ec2-auto-discovery:9877']
+        labels:
+          component: 'auto-discovery'
 
-  # ── Blackbox HTTP — UAT ALB health check ─────────────────────────
-  # File is auto-updated by the deploy.sh script after terraform apply
+  # ── ALB Health Check — obs-uat-alb ────────────────────────────────────────
+  # Target file auto-updated by deploy.sh after terraform apply
   - job_name: 'blackbox-uat-alb'
     metrics_path: /probe
     params:
@@ -79,10 +95,12 @@ scrape_configs:
         replacement: blackbox-exporter:9115
       - target_label: environment
         replacement: uat
+      - target_label: env_name
+        replacement: obs-uat
       - target_label: region
         replacement: ap-south-1
 
-  # ── Blackbox HTTP — DEV ALB health check ─────────────────────────
+  # ── ALB Health Check — obs-dev-alb ────────────────────────────────────────
   - job_name: 'blackbox-dev-alb'
     metrics_path: /probe
     params:
@@ -100,10 +118,29 @@ scrape_configs:
         replacement: blackbox-exporter:9115
       - target_label: environment
         replacement: dev
+      - target_label: env_name
+        replacement: obs-dev
       - target_label: region
         replacement: ap-south-1
 
-  # ── SSL Certificate Expiry ────────────────────────────────────────
+  # ── Blackbox HTTP — general websites ──────────────────────────────────────
+  - job_name: 'blackbox-http'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/targets/websites.yml
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # ── SSL Certificate Expiry ────────────────────────────────────────────────
   - job_name: 'ssl-certificates'
     metrics_path: /probe
     params:
@@ -120,14 +157,14 @@ scrape_configs:
       - target_label: __address__
         replacement: ssl-exporter:9219
 
-  # ── Windows Exporter ──────────────────────────────────────────────
+  # ── Windows Exporter ──────────────────────────────────────────────────────
   - job_name: 'windows-exporter'
     file_sd_configs:
       - files:
           - /etc/prometheus/targets/windows_nodes.yml
         refresh_interval: 30s
 
-  # ── Blackbox ICMP Ping ────────────────────────────────────────────
+  # ── Blackbox ICMP Ping ────────────────────────────────────────────────────
   - job_name: 'blackbox-ping'
     metrics_path: /probe
     params:
@@ -144,20 +181,12 @@ scrape_configs:
       - target_label: __address__
         replacement: blackbox-exporter:9115
 
-  # ── Grafana ───────────────────────────────────────────────────────
+  # ── Grafana ───────────────────────────────────────────────────────────────
   - job_name: 'grafana'
     static_configs:
       - targets: ['grafana:3000']
 
-  # ── AI Agent ─────────────────────────────────────────────────────
+  # ── AI Agent ─────────────────────────────────────────────────────────────
   - job_name: 'ai-agent'
     static_configs:
       - targets: ['ai-observability-agent:8888']
-
-  # ── Auto-Discovery Agent ─────────────────────────────────────────
-  # Writes ec2_metrics.prom every 2 min covering ap-south-1
-  # UAT instances: env="uat"  |  DEV instances: env="dev"
-  # All tagged ManagedBy=terraform are automatically included
-  - job_name: 'auto-discovery'
-    static_configs:
-      - targets: ['ec2-auto-discovery:9877']

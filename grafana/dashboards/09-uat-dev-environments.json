@@ -1,11 +1,11 @@
 {
-  "uid": "uat-dev-terraform-envs",
-  "title": "🏗️ UAT & DEV — Terraform Environments",
-  "description": "Live monitoring of UAT and DEV infrastructure deployed via Terraform in ap-south-1 (Mumbai). EC2 ASG, RDS PostgreSQL, ALB, NLB — auto-discovered every 2 minutes.",
-  "tags": ["uat", "dev", "terraform", "ec2", "rds", "alb", "asg", "ap-south-1"],
+  "uid": "obs-uat-dev-terraform",
+  "title": "🏗️ UAT & DEV — Terraform Environments (ap-south-1)",
+  "description": "Live auto-discovered monitoring for obs-uat and obs-dev Terraform infrastructure. EC2 (×4 each), ASG, ALB, NLB, RDS PostgreSQL — all in ap-south-1.",
+  "tags": ["uat", "dev", "terraform", "obs-uat", "obs-dev", "ec2", "rds", "alb", "ap-south-1"],
   "timezone": "browser",
   "schemaVersion": 38,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": { "from": "now-1h", "to": "now" },
   "templating": {
@@ -16,30 +16,33 @@
         "label": "Environment",
         "current": { "text": "All", "value": "$__all" },
         "options": [
-          { "text": "All",  "value": "$__all", "selected": true },
-          { "text": "UAT",  "value": "uat" },
-          { "text": "DEV",  "value": "dev" }
+          { "text": "All", "value": "$__all", "selected": true },
+          { "text": "UAT (obs-uat)", "value": "uat" },
+          { "text": "DEV (obs-dev)", "value": "dev" }
         ],
         "includeAll": true,
-        "multi": false
-      },
-      {
-        "name": "region",
-        "type": "constant",
-        "label": "Region",
-        "query": "ap-south-1",
-        "hide": 1
+        "multi": false,
+        "query": "uat,dev"
       }
     ]
   },
   "panels": [
 
-    { "id": 1, "type": "row", "title": "📊 Environment Overview", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
+    {
+      "id": 1,
+      "type": "row",
+      "title": "📊 Environment Summary",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
 
     {
-      "id": 2, "title": "UAT — Running EC2", "type": "stat",
+      "id": 2,
+      "title": "obs-uat — Running EC2",
+      "type": "stat",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "textMode": "auto" },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -50,7 +53,6 @@
           ]}
         }
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "Prometheus" },
         "expr": "sum(ec2_instance_running{env=\"uat\"})",
@@ -59,9 +61,12 @@
     },
 
     {
-      "id": 3, "title": "DEV — Running EC2", "type": "stat",
+      "id": 3,
+      "title": "obs-dev — Running EC2",
+      "type": "stat",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -72,7 +77,6 @@
           ]}
         }
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "Prometheus" },
         "expr": "sum(ec2_instance_running{env=\"dev\"})",
@@ -81,19 +85,20 @@
     },
 
     {
-      "id": 4, "title": "UAT — ALB Status", "type": "stat",
+      "id": 4,
+      "title": "obs-uat-alb Status",
+      "type": "stat",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "DOWN",  "color": "red"   } } },
-            { "type": "value", "options": { "1": { "text": "UP",    "color": "green" } } }
+            { "type": "value", "options": { "0": { "text": "🔴 DOWN", "color": "red" } } },
+            { "type": "value", "options": { "1": { "text": "🟢 UP",   "color": "green" } } }
           ]
         }
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "Prometheus" },
         "expr": "probe_success{job=\"blackbox-uat-alb\"}",
@@ -102,19 +107,20 @@
     },
 
     {
-      "id": 5, "title": "DEV — ALB Status", "type": "stat",
+      "id": 5,
+      "title": "obs-dev-alb Status",
+      "type": "stat",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
           "mappings": [
-            { "type": "value", "options": { "0": { "text": "DOWN",  "color": "red"   } } },
-            { "type": "value", "options": { "1": { "text": "UP",    "color": "green" } } }
+            { "type": "value", "options": { "0": { "text": "🔴 DOWN", "color": "red" } } },
+            { "type": "value", "options": { "1": { "text": "🟢 UP",   "color": "green" } } }
           ]
         }
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "Prometheus" },
         "expr": "probe_success{job=\"blackbox-dev-alb\"}",
@@ -123,20 +129,22 @@
     },
 
     {
-      "id": 6, "title": "UAT — RDS CPU %", "type": "stat",
+      "id": 6,
+      "title": "obs-uat-postgres CPU %",
+      "type": "stat",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
           "thresholds": { "mode": "absolute", "steps": [
-            { "color": "green",  "value": 0  },
+            { "color": "green", "value": 0 },
             { "color": "orange", "value": 70 },
-            { "color": "red",    "value": 85 }
+            { "color": "red", "value": 85 }
           ]}
         }
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "Prometheus" },
         "expr": "aws_rds_cpuutilization_average{dbinstance_identifier=\"obs-uat-postgres\"}",
@@ -145,20 +153,22 @@
     },
 
     {
-      "id": 7, "title": "DEV — RDS CPU %", "type": "stat",
+      "id": 7,
+      "title": "obs-dev-postgres CPU %",
+      "type": "stat",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
       "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
           "thresholds": { "mode": "absolute", "steps": [
-            { "color": "green",  "value": 0  },
+            { "color": "green", "value": 0 },
             { "color": "orange", "value": 70 },
-            { "color": "red",    "value": 85 }
+            { "color": "red", "value": 85 }
           ]}
         }
       },
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "Prometheus" },
         "expr": "aws_rds_cpuutilization_average{dbinstance_identifier=\"obs-dev-postgres\"}",
@@ -166,33 +176,47 @@
       }]
     },
 
-    { "id": 10, "type": "row", "title": "🖥️ EC2 Instances — All Environments", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 } },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "🖥️ EC2 Instances — Auto-Discovered (obs-uat + obs-dev)",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 }
+    },
 
     {
       "id": 11,
-      "title": "EC2 Instances — Status by Environment",
+      "title": "All EC2 Instances — obs-uat-ec2 × 4 | obs-dev-ec2 × 4",
       "type": "table",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 6 },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 6 },
+      "options": {
+        "sortBy": [{ "displayName": "Environment", "desc": false }],
+        "cellHeight": "sm"
+      },
       "fieldConfig": {
-        "defaults": { "custom": { "align": "left" } },
+        "defaults": { "custom": { "align": "left", "cellOptions": { "type": "auto" } } },
         "overrides": [
-          { "matcher": { "id": "byName", "options": "State"       }, "properties": [{ "id": "custom.width", "value": 80  }] },
-          { "matcher": { "id": "byName", "options": "Environment" }, "properties": [{ "id": "custom.width", "value": 90  }] },
-          { "matcher": { "id": "byName", "options": "CPU %"       }, "properties": [{ "id": "custom.width", "value": 80  }, { "id": "unit", "value": "percent" }] },
-          { "matcher": { "id": "byName", "options": "State" }, "properties": [{
-            "id": "mappings", "value": [
-              { "type": "value", "options": { "1": { "text": "🟢 Running", "color": "green" } } },
-              { "type": "value", "options": { "0": { "text": "🔴 Stopped", "color": "red"   } } }
+          {
+            "matcher": { "id": "byName", "options": "State" },
+            "properties": [
+              { "id": "custom.width", "value": 120 },
+              { "id": "mappings", "value": [
+                { "type": "value", "options": { "1": { "text": "🟢 Running", "color": "green" } } },
+                { "type": "value", "options": { "0": { "text": "🔴 Stopped", "color": "red"   } } }
+              ]}
             ]
-          }]}
+          },
+          { "matcher": { "id": "byName", "options": "CPU %"       }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "custom.width", "value": 80 }] },
+          { "matcher": { "id": "byName", "options": "Environment" }, "properties": [{ "id": "custom.width", "value": 100 }] },
+          { "matcher": { "id": "byName", "options": "Type"        }, "properties": [{ "id": "custom.width", "value": 90 }] },
+          { "matcher": { "id": "byName", "options": "AZ"          }, "properties": [{ "id": "custom.width", "value": 130 }] }
         ]
       },
-      "options": { "sortBy": [{ "displayName": "Environment", "desc": false }] },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "ec2_instance_running * on(instance_id) group_left(instance_name) ec2_instance_info{env=~\"$environment\"}",
+          "expr": "ec2_instance_running * on(instance_id) group_left(instance_name, instance_type, az, os, private_ip) ec2_instance_info{env=~\"$environment\"}",
           "legendFormat": "{{instance_name}}",
           "instant": true,
           "format": "table"
@@ -207,122 +231,278 @@
       ],
       "transformations": [
         { "id": "merge", "options": {} },
-        { "id": "organize", "options": {
-          "renameByName": {
-            "instance_name":  "Name",
-            "instance_id":    "Instance ID",
-            "instance_type":  "Type",
-            "az":             "AZ",
-            "env":            "Environment",
-            "Value #A":       "State",
-            "Value #B":       "CPU %",
-            "private_ip":     "Private IP"
-          },
-          "excludeByName": {
-            "Time": true, "account": true, "os": true,
-            "public_ip": true, "region": true, "__name__": true
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "instance_name":  "Name",
+              "instance_id":    "Instance ID",
+              "instance_type":  "Type",
+              "az":             "AZ",
+              "env":            "Environment",
+              "os":             "OS",
+              "private_ip":     "Private IP",
+              "Value #A":       "State",
+              "Value #B":       "CPU %"
+            },
+            "excludeByName": {
+              "Time": true, "account": true, "public_ip": true,
+              "region": true, "__name__": true, "job": true
+            },
+            "indexByName": {
+              "Name": 0, "Instance ID": 1, "Environment": 2,
+              "State": 3, "CPU %": 4, "Type": 5, "AZ": 6,
+              "OS": 7, "Private IP": 8
+            }
           }
-        }}
+        }
       ]
     },
 
-    { "id": 20, "type": "row", "title": "📈 CPU Utilisation", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 } },
+    {
+      "id": 20,
+      "type": "row",
+      "title": "📈 CPU Utilisation — obs-uat-ec2 vs obs-dev-ec2",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 }
+    },
 
     {
       "id": 21,
-      "title": "EC2 CPU % — UAT",
+      "title": "CPU % — obs-uat-ec2 (4 instances)",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
-          "min": 0, "max": 100,
+          "unit": "percent", "min": 0, "max": 100,
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": true },
           "thresholds": { "mode": "absolute", "steps": [
             { "color": "green", "value": 0 },
             { "color": "orange", "value": 70 },
             { "color": "red", "value": 85 }
-          ]},
-          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+          ]}
         }
       },
-      "options": { "tooltip": { "mode": "multi" } },
+      "options": { "tooltip": { "mode": "multi", "sort": "desc" } },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "Prometheus" },
         "expr": "ec2_cpu_percent{env=\"uat\"} * on(instance_id) group_left(instance_name) ec2_instance_info{env=\"uat\"}",
-        "legendFormat": "{{ instance_name }}"
+        "legendFormat": "{{ instance_name }} ({{ instance_id }})"
       }]
     },
 
     {
       "id": 22,
-      "title": "EC2 CPU % — DEV",
+      "title": "CPU % — obs-dev-ec2 (4 instances)",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
-          "min": 0, "max": 100,
-          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+          "unit": "percent", "min": 0, "max": 100,
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": true }
         }
       },
-      "options": { "tooltip": { "mode": "multi" } },
+      "options": { "tooltip": { "mode": "multi", "sort": "desc" } },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "Prometheus" },
         "expr": "ec2_cpu_percent{env=\"dev\"} * on(instance_id) group_left(instance_name) ec2_instance_info{env=\"dev\"}",
-        "legendFormat": "{{ instance_name }}"
+        "legendFormat": "{{ instance_name }} ({{ instance_id }})"
       }]
     },
 
-    { "id": 30, "type": "row", "title": "🌐 Network Traffic", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 } },
+    {
+      "id": 30,
+      "type": "row",
+      "title": "🌐 Network Traffic",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 24 }
+    },
 
     {
       "id": 31,
-      "title": "Network In — UAT",
+      "title": "Network In — UAT vs DEV",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 24 },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 25 },
       "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "custom": { "lineWidth": 2, "fillOpacity": 10 }
-        }
+        "defaults": { "unit": "bytes", "custom": { "lineWidth": 2, "fillOpacity": 10 } }
       },
-      "targets": [{
-        "datasource": { "type": "prometheus", "uid": "Prometheus" },
-        "expr": "ec2_network_in_bytes{env=\"uat\"} * on(instance_id) group_left(instance_name) ec2_instance_info{env=\"uat\"}",
-        "legendFormat": "{{ instance_name }}"
-      }]
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "sum(ec2_network_in_bytes{env=\"uat\"})",
+          "legendFormat": "obs-uat total network-in"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "sum(ec2_network_in_bytes{env=\"dev\"})",
+          "legendFormat": "obs-dev total network-in"
+        }
+      ]
     },
 
     {
       "id": 32,
-      "title": "Network In — DEV",
+      "title": "Network Out — UAT vs DEV",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 24 },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 25 },
       "fieldConfig": {
-        "defaults": {
-          "unit": "bytes",
-          "custom": { "lineWidth": 2, "fillOpacity": 10 }
-        }
+        "defaults": { "unit": "bytes", "custom": { "lineWidth": 2, "fillOpacity": 10 } }
       },
-      "targets": [{
-        "datasource": { "type": "prometheus", "uid": "Prometheus" },
-        "expr": "ec2_network_in_bytes{env=\"dev\"} * on(instance_id) group_left(instance_name) ec2_instance_info{env=\"dev\"}",
-        "legendFormat": "{{ instance_name }}"
-      }]
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "sum(ec2_network_out_bytes{env=\"uat\"})",
+          "legendFormat": "obs-uat total network-out"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "sum(ec2_network_out_bytes{env=\"dev\"})",
+          "legendFormat": "obs-dev total network-out"
+        }
+      ]
     },
 
-    { "id": 40, "type": "row", "title": "🗄️ RDS PostgreSQL", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 31 } },
+    {
+      "id": 40,
+      "type": "row",
+      "title": "⚖️ Load Balancers — obs-uat-alb | obs-dev-alb | obs-uat-nlb | obs-dev-nlb",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 }
+    },
 
     {
       "id": 41,
-      "title": "RDS CPU — UAT vs DEV",
+      "title": "ALB Response Time — obs-uat-alb vs obs-dev-alb",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 32 },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 33 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green",  "value": 0   },
+            { "color": "orange", "value": 0.5 },
+            { "color": "red",    "value": 2   }
+          ]}
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "probe_duration_seconds{job=\"blackbox-uat-alb\"}",
+          "legendFormat": "obs-uat-alb latency"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "probe_duration_seconds{job=\"blackbox-dev-alb\"}",
+          "legendFormat": "obs-dev-alb latency"
+        }
+      ]
+    },
+
+    {
+      "id": 42,
+      "title": "ALB HTTP Success — obs-uat-alb vs obs-dev-alb",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 33 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short", "min": 0, "max": 1,
+          "custom": { "lineWidth": 2 },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red"   } } },
+            { "type": "value", "options": { "1": { "text": "UP",   "color": "green" } } }
+          ]
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "probe_success{job=\"blackbox-uat-alb\"}",
+          "legendFormat": "obs-uat-alb"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "probe_success{job=\"blackbox-dev-alb\"}",
+          "legendFormat": "obs-dev-alb"
+        }
+      ]
+    },
+
+    {
+      "id": 43,
+      "title": "ALB Healthy Host Count — obs-uat-alb vs obs-dev-alb",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 40 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red",    "value": 0 },
+            { "color": "orange", "value": 2 },
+            { "color": "green",  "value": 4 }
+          ]}
+        }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "aws_applicationelb_healthy_host_count_average{load_balancer=~\".*obs-uat-alb.*\"}",
+          "legendFormat": "obs-uat-alb healthy hosts"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "aws_applicationelb_healthy_host_count_average{load_balancer=~\".*obs-dev-alb.*\"}",
+          "legendFormat": "obs-dev-alb healthy hosts"
+        }
+      ]
+    },
+
+    {
+      "id": 44,
+      "title": "ALB Request Count — obs-uat-alb vs obs-dev-alb",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 40 },
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10 } }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "aws_applicationelb_request_count_sum{load_balancer=~\".*obs-uat-alb.*\"}",
+          "legendFormat": "obs-uat-alb requests"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "Prometheus" },
+          "expr": "aws_applicationelb_request_count_sum{load_balancer=~\".*obs-dev-alb.*\"}",
+          "legendFormat": "obs-dev-alb requests"
+        }
+      ]
+    },
+
+    {
+      "id": 50,
+      "type": "row",
+      "title": "🗄️ RDS PostgreSQL — obs-uat-postgres | obs-dev-postgres",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 47 }
+    },
+
+    {
+      "id": 51,
+      "title": "RDS CPU % — obs-uat-postgres vs obs-dev-postgres",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 48 },
       "fieldConfig": {
         "defaults": {
           "unit": "percent",
@@ -333,56 +513,53 @@
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
           "expr": "aws_rds_cpuutilization_average{dbinstance_identifier=\"obs-uat-postgres\"}",
-          "legendFormat": "UAT RDS CPU"
+          "legendFormat": "obs-uat-postgres CPU"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
           "expr": "aws_rds_cpuutilization_average{dbinstance_identifier=\"obs-dev-postgres\"}",
-          "legendFormat": "DEV RDS CPU"
+          "legendFormat": "obs-dev-postgres CPU"
         }
       ]
     },
 
     {
-      "id": 42,
-      "title": "RDS DB Connections — UAT vs DEV",
+      "id": 52,
+      "title": "RDS Connections — obs-uat-postgres vs obs-dev-postgres",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 32 },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 48 },
       "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": { "lineWidth": 2, "fillOpacity": 10 }
-        }
+        "defaults": { "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 10 } }
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
           "expr": "aws_rds_database_connections_average{dbinstance_identifier=\"obs-uat-postgres\"}",
-          "legendFormat": "UAT Connections"
+          "legendFormat": "obs-uat-postgres connections"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
           "expr": "aws_rds_database_connections_average{dbinstance_identifier=\"obs-dev-postgres\"}",
-          "legendFormat": "DEV Connections"
+          "legendFormat": "obs-dev-postgres connections"
         }
       ]
     },
 
     {
-      "id": 43,
-      "title": "RDS Free Storage — UAT vs DEV",
+      "id": 53,
+      "title": "RDS Free Storage — obs-uat-postgres vs obs-dev-postgres",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 39 },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 55 },
       "fieldConfig": {
         "defaults": {
           "unit": "bytes",
           "custom": { "lineWidth": 2, "fillOpacity": 10 },
           "thresholds": { "mode": "absolute", "steps": [
-            { "color": "red",    "value": 0          },
-            { "color": "orange", "value": 2147483648 },
-            { "color": "green",  "value": 5368709120 }
+            { "color": "red",    "value": 0           },
+            { "color": "orange", "value": 2147483648  },
+            { "color": "green",  "value": 10737418240 }
           ]}
         }
       },
@@ -390,127 +567,129 @@
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
           "expr": "aws_rds_free_storage_space_average{dbinstance_identifier=\"obs-uat-postgres\"}",
-          "legendFormat": "UAT Free Storage"
+          "legendFormat": "obs-uat-postgres free storage"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
           "expr": "aws_rds_free_storage_space_average{dbinstance_identifier=\"obs-dev-postgres\"}",
-          "legendFormat": "DEV Free Storage"
+          "legendFormat": "obs-dev-postgres free storage"
         }
       ]
     },
 
     {
-      "id": 44,
-      "title": "RDS Read/Write IOPS — UAT vs DEV",
+      "id": 54,
+      "title": "RDS Read/Write IOPS",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 39 },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 55 },
       "fieldConfig": {
-        "defaults": {
-          "unit": "iops",
-          "custom": { "lineWidth": 2, "fillOpacity": 10 }
-        }
+        "defaults": { "unit": "iops", "custom": { "lineWidth": 2, "fillOpacity": 10 } }
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
           "expr": "aws_rds_read_iops_average{dbinstance_identifier=\"obs-uat-postgres\"}",
-          "legendFormat": "UAT Read IOPS"
+          "legendFormat": "obs-uat-postgres read IOPS"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
           "expr": "aws_rds_write_iops_average{dbinstance_identifier=\"obs-uat-postgres\"}",
-          "legendFormat": "UAT Write IOPS"
+          "legendFormat": "obs-uat-postgres write IOPS"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
           "expr": "aws_rds_read_iops_average{dbinstance_identifier=\"obs-dev-postgres\"}",
-          "legendFormat": "DEV Read IOPS"
+          "legendFormat": "obs-dev-postgres read IOPS"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
           "expr": "aws_rds_write_iops_average{dbinstance_identifier=\"obs-dev-postgres\"}",
-          "legendFormat": "DEV Write IOPS"
+          "legendFormat": "obs-dev-postgres write IOPS"
         }
       ]
     },
 
-    { "id": 50, "type": "row", "title": "⚖️ Load Balancers — ALB & NLB", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 46 } },
+    {
+      "id": 60,
+      "type": "row",
+      "title": "🔄 Auto Scaling Groups — obs-uat-asg | obs-dev-asg",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 62 }
+    },
 
     {
-      "id": 51,
-      "title": "ALB Response Time — UAT vs DEV",
+      "id": 61,
+      "title": "ASG In-Service Instances — obs-uat-asg vs obs-dev-asg",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 47 },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 63 },
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
+          "unit": "short", "min": 0,
           "custom": { "lineWidth": 2, "fillOpacity": 10 },
           "thresholds": { "mode": "absolute", "steps": [
-            { "color": "green", "value": 0   },
-            { "color": "orange","value": 0.5 },
-            { "color": "red",   "value": 2   }
+            { "color": "red",    "value": 0 },
+            { "color": "orange", "value": 2 },
+            { "color": "green",  "value": 4 }
           ]}
         }
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "probe_duration_seconds{job=\"blackbox-uat-alb\"}",
-          "legendFormat": "UAT ALB Latency"
+          "expr": "aws_autoscaling_group_in_service_instances_average{auto_scaling_group_name=\"obs-uat-asg\"}",
+          "legendFormat": "obs-uat-asg in-service"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "probe_duration_seconds{job=\"blackbox-dev-alb\"}",
-          "legendFormat": "DEV ALB Latency"
+          "expr": "aws_autoscaling_group_in_service_instances_average{auto_scaling_group_name=\"obs-dev-asg\"}",
+          "legendFormat": "obs-dev-asg in-service"
         }
       ]
     },
 
     {
-      "id": 52,
-      "title": "ALB HTTP Success Rate",
+      "id": 62,
+      "title": "Total Running EC2 per Environment",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 47 },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 63 },
       "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "min": 0, "max": 1,
-          "mappings": [
-            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red"   } } },
-            { "type": "value", "options": { "1": { "text": "UP",   "color": "green" } } }
-          ],
-          "custom": { "lineWidth": 2 }
-        }
+        "defaults": { "unit": "short", "min": 0, "custom": { "lineWidth": 2, "fillOpacity": 10 } }
       },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "probe_success{job=\"blackbox-uat-alb\"}",
-          "legendFormat": "UAT ALB"
+          "expr": "sum(ec2_instance_running{env=\"uat\"})",
+          "legendFormat": "obs-uat running"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "probe_success{job=\"blackbox-dev-alb\"}",
-          "legendFormat": "DEV ALB"
+          "expr": "sum(ec2_instance_running{env=\"dev\"})",
+          "legendFormat": "obs-dev running"
         }
       ]
     },
 
-    { "id": 60, "type": "row", "title": "🔔 Active Alerts", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 54 } },
+    {
+      "id": 70,
+      "type": "row",
+      "title": "🔔 Active Alerts",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 70 }
+    },
 
     {
-      "id": 61,
-      "title": "Firing Alerts — UAT & DEV",
+      "id": 71,
+      "title": "Firing Alerts — obs-uat and obs-dev",
       "type": "table",
       "datasource": { "type": "prometheus", "uid": "Prometheus" },
-      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 55 },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 71 },
       "fieldConfig": {
         "defaults": { "custom": { "align": "left" } }
       },
+      "options": { "cellHeight": "sm" },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "Prometheus" },
         "expr": "ALERTS{alertstate=\"firing\", env=~\"uat|dev\"}",
@@ -518,17 +697,20 @@
         "instant": true,
         "format": "table"
       }],
-      "transformations": [
-        { "id": "organize", "options": {
+      "transformations": [{
+        "id": "organize",
+        "options": {
           "renameByName": {
             "alertname": "Alert",
             "env":       "Environment",
             "severity":  "Severity",
             "instance":  "Instance"
           },
-          "excludeByName": { "Time": true, "Value": true, "__name__": true, "alertstate": true }
-        }}
-      ]
+          "excludeByName": {
+            "Time": true, "Value": true, "__name__": true, "alertstate": true
+          }
+        }
+      }]
     }
 
   ]
