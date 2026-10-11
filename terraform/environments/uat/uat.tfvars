@@ -48,7 +48,7 @@ acm_certificate_arn = ""
 
 # ── RDS ──────────────────────────────────────────────────────────────────────
 rds_instance_class      = "db.t3.micro"
-postgres_engine_version = "15.4"
+postgres_engine_version = "15.7"
 postgres_major_version  = "15"
 allocated_storage       = 20
 multi_az                = false
