@@ -14,6 +14,28 @@
     category: main
     owner: eclouddevops
 
+# ── UAT Website (EC2) ──────────────────────────────────────────────────
+# Replace the placeholder below with your actual UAT EC2 URL or IP
+- targets:
+    - 'http://uat.aiobz.com'          # UAT subdomain — replace with actual URL
+    # - 'http://<uat-ec2-public-ip>'  # Alternatively, use EC2 public IP + port
+  labels:
+    env: uat
+    service: website
+    category: main
+    owner: eclouddevops
+
+# ── Dev Website (EC2) ──────────────────────────────────────────────────
+# Replace the placeholder below with your actual Dev EC2 URL or IP
+- targets:
+    - 'http://dev.aiobz.com'          # Dev subdomain — replace with actual URL
+    # - 'http://<dev-ec2-public-ip>'  # Alternatively, use EC2 public IP + port
+  labels:
+    env: dev
+    service: website
+    category: main
+    owner: eclouddevops
+
 # ── E-Commerce Website ─────────────────────────────────────────────────
 # - targets:
 #     - 'https://shop.eclouddevops.com'
