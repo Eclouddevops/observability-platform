@@ -1,0 +1,11 @@
+# obs-dev ALB target — ap-south-1
+# Auto-updated by deploy.sh after terraform apply
+# Replace PLACEHOLDER with actual ALB DNS from: terraform output alb_dns_name
+- targets:
+    - "REPLACE_WITH_DEV_ALB_DNS"
+  labels:
+    environment: "dev"
+    env_name:    "obs-dev"
+    region:      "ap-south-1"
+    tier:        "alb"
+    project:     "observability"

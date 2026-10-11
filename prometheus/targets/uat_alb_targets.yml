@@ -1,0 +1,11 @@
+# obs-uat ALB target — ap-south-1
+# Auto-updated by deploy.sh after terraform apply
+# Replace PLACEHOLDER with actual ALB DNS from: terraform output alb_dns_name
+- targets:
+    - "REPLACE_WITH_UAT_ALB_DNS"
+  labels:
+    environment: "uat"
+    env_name:    "obs-uat"
+    region:      "ap-south-1"
+    tier:        "alb"
+    project:     "observability"

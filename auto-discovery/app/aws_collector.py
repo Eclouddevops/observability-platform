@@ -108,7 +108,7 @@ def collect_and_write():
                 priv  = inst.get("PrivateIpAddress", "")
                 pub   = inst.get("PublicIpAddress", "")
                 plat  = "windows" if inst.get("Platform", "").lower() == "windows" else "linux"
-                env   = tags.get("Environment", tags.get("Env", "production"))
+                env   = tags.get("Environment", tags.get("Env", "unknown"))
                 is_running = 1 if state == "running" else 0
 
                 if is_running:

@@ -1,0 +1,312 @@
+name: Terraform CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "terraform/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "terraform/**"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        default: "dev"
+        type: choice
+        options: [dev, uat]
+      action:
+        description: "Terraform action"
+        required: true
+        default: "plan"
+        type: choice
+        options: [plan, apply, destroy]
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write   # for OIDC / AWS auth
+
+env:
+  TF_VERSION: "1.7.5"
+  AWS_REGION: "ap-south-1"
+  AWS_ACCOUNT_ID: "496251222247"
+
+###############################################################################
+# Jobs
+###############################################################################
+jobs:
+  # ── Lint & Validate ────────────────────────────────────────────────────────
+  terraform-validate:
+    name: Validate (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [uat, dev]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Format Check
+        id: fmt
+        run: terraform fmt -check -recursive terraform/
+        continue-on-error: true
+
+      - name: Terraform Init (${{ matrix.environment }})
+        id: init
+        run: |
+          cd terraform/environments/${{ matrix.environment }}
+          terraform init -backend=false
+
+      - name: Terraform Validate (${{ matrix.environment }})
+        id: validate
+        run: |
+          cd terraform/environments/${{ matrix.environment }}
+          terraform validate -no-color
+
+      - name: Post validation result to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `#### Terraform Validation — \`${{ matrix.environment }}\`
+
+            | Step | Result |
+            |------|--------|
+            | Format  | \`${{ steps.fmt.outcome }}\`      |
+            | Init    | \`${{ steps.init.outcome }}\`     |
+            | Validate| \`${{ steps.validate.outcome }}\` |
+
+            *Triggered by @${{ github.actor }} on \`${{ github.ref_name }}\`*`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+  # ── Plan ───────────────────────────────────────────────────────────────────
+  terraform-plan:
+    name: Plan (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    needs: terraform-validate
+    strategy:
+      matrix:
+        environment: [uat, dev]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init (${{ matrix.environment }})
+        run: |
+          cd terraform/environments/${{ matrix.environment }}
+          terraform init \
+            -backend-config="bucket=${{ env.AWS_ACCOUNT_ID }}-terraform-state" \
+            -backend-config="key=${{ matrix.environment }}/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=terraform-state-lock" \
+            -backend-config="encrypt=true"
+
+      - name: Terraform Plan (${{ matrix.environment }})
+        id: plan
+        run: |
+          cd terraform/environments/${{ matrix.environment }}
+          terraform plan \
+            -var-file="${{ matrix.environment }}.tfvars" \
+            -no-color \
+            -out=tfplan \
+            2>&1 | tee plan_output.txt
+        continue-on-error: true
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ matrix.environment }}-${{ github.run_id }}
+          path: terraform/environments/${{ matrix.environment }}/tfplan
+          retention-days: 5
+
+      - name: Post plan summary to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          PLAN: ${{ steps.plan.outputs.stdout }}
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync(
+              'terraform/environments/${{ matrix.environment }}/plan_output.txt', 'utf8'
+            ).substring(0, 60000);
+            const outcome = '${{ steps.plan.outcome }}';
+            const body = [
+              `#### Terraform Plan — \`${{ matrix.environment }}\` ${outcome === 'success' ? '✅' : '❌'}`,
+              '',
+              '<details><summary>Show Plan</summary>',
+              '',
+              '```terraform',
+              plan,
+              '```',
+              '</details>',
+              '',
+              `*Triggered by @${{ github.actor }}*`
+            ].join('\n');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+            if (outcome !== 'success') {
+              core.setFailed('Terraform plan failed for ${{ matrix.environment }}');
+            }
+
+  # ── Auto-Approve PR ────────────────────────────────────────────────────────
+  auto-approve:
+    name: Auto-Approve PR
+    runs-on: ubuntu-latest
+    needs: terraform-plan
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Auto-approve pull request
+        uses: hmarr/auto-approve-action@v4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          review-message: |
+            ✅ **Auto-approved** — Terraform validate and plan passed for all environments (UAT + DEV).
+
+            The plan artifacts are attached to this run. Review them above before the apply job runs on merge.
+
+  # ── Auto-Merge PR ──────────────────────────────────────────────────────────
+  auto-merge:
+    name: Auto-Merge PR
+    runs-on: ubuntu-latest
+    needs: auto-approve
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Enable auto-merge (squash)
+        uses: peter-evans/enable-pull-request-automerge@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request-number: ${{ github.event.pull_request.number }}
+          merge-method: squash
+
+  # ── Apply (on push to main only) ───────────────────────────────────────────
+  terraform-apply:
+    name: Apply (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    needs: terraform-plan
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    strategy:
+      matrix:
+        environment: [uat, dev]
+      # Apply sequentially — UAT first, then DEV
+      max-parallel: 1
+    environment:
+      name: terraform-${{ matrix.environment }}
+      url: https://console.aws.amazon.com/ec2/home?region=ap-south-1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init (${{ matrix.environment }})
+        run: |
+          cd terraform/environments/${{ matrix.environment }}
+          terraform init \
+            -backend-config="bucket=${{ env.AWS_ACCOUNT_ID }}-terraform-state" \
+            -backend-config="key=${{ matrix.environment }}/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=terraform-state-lock" \
+            -backend-config="encrypt=true"
+
+      - name: Terraform Apply (${{ matrix.environment }})
+        run: |
+          cd terraform/environments/${{ matrix.environment }}
+          terraform apply \
+            -var-file="${{ matrix.environment }}.tfvars" \
+            -auto-approve \
+            -no-color
+
+      - name: Terraform Output (${{ matrix.environment }})
+        run: |
+          cd terraform/environments/${{ matrix.environment }}
+          echo "### Terraform Outputs — ${{ matrix.environment }}" >> $GITHUB_STEP_SUMMARY
+          terraform output -no-color >> $GITHUB_STEP_SUMMARY
+
+  # ── Manual Destroy (workflow_dispatch only) ────────────────────────────────
+  terraform-destroy:
+    name: Destroy (${{ github.event.inputs.environment }})
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+    environment:
+      name: terraform-${{ github.event.inputs.environment }}-destroy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_TERRAFORM_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        run: |
+          cd terraform/environments/${{ github.event.inputs.environment }}
+          terraform init \
+            -backend-config="bucket=${{ env.AWS_ACCOUNT_ID }}-terraform-state" \
+            -backend-config="key=${{ github.event.inputs.environment }}/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=terraform-state-lock" \
+            -backend-config="encrypt=true"
+
+      - name: Terraform Destroy
+        run: |
+          cd terraform/environments/${{ github.event.inputs.environment }}
+          terraform destroy \
+            -var-file="${{ github.event.inputs.environment }}.tfvars" \
+            -auto-approve \
+            -no-color
