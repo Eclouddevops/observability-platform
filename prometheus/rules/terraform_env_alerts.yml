@@ -100,7 +100,7 @@ groups:
 
       - alert: TerraformRDSHighCPU
         expr: |
-          aws_rds_cpuutilization_average{dbinstance_identifier=~"observability-(uat|dev)-postgres"} > 80
+          aws_rds_cpuutilization_average{dbinstance_identifier=~"obs-(uat|dev)-postgres"} > 80
         for: 5m
         labels:
           severity: warning
@@ -110,7 +110,7 @@ groups:
 
       - alert: TerraformRDSLowStorage
         expr: |
-          aws_rds_free_storage_space_average{dbinstance_identifier=~"observability-(uat|dev)-postgres"} < 2147483648
+          aws_rds_free_storage_space_average{dbinstance_identifier=~"obs-(uat|dev)-postgres"} < 2147483648
         for: 10m
         labels:
           severity: warning
@@ -120,7 +120,7 @@ groups:
 
       - alert: TerraformRDSHighConnections
         expr: |
-          aws_rds_database_connections_average{dbinstance_identifier=~"observability-(uat|dev)-postgres"} > 80
+          aws_rds_database_connections_average{dbinstance_identifier=~"obs-(uat|dev)-postgres"} > 80
         for: 5m
         labels:
           severity: warning

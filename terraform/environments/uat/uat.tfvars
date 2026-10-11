@@ -3,7 +3,7 @@
 # Apply: terraform apply -var-file="uat.tfvars"
 ###############################################################################
 
-project        = "observability"
+project        = "obs-uat"
 aws_region     = "ap-south-1"
 aws_account_id = "496251222247"
 

@@ -3,7 +3,7 @@
 # Apply: terraform apply -var-file="dev.tfvars"
 ###############################################################################
 
-project        = "observability"
+project        = "obs-dev"
 aws_region     = "ap-south-1"
 aws_account_id = "496251222247"
 

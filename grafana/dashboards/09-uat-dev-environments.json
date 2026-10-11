@@ -139,7 +139,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "Prometheus" },
-        "expr": "aws_rds_cpuutilization_average{dbinstance_identifier=\"observability-uat-postgres\"}",
+        "expr": "aws_rds_cpuutilization_average{dbinstance_identifier=\"obs-uat-postgres\"}",
         "legendFormat": "UAT RDS CPU"
       }]
     },
@@ -161,7 +161,7 @@
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
       "targets": [{
         "datasource": { "type": "prometheus", "uid": "Prometheus" },
-        "expr": "aws_rds_cpuutilization_average{dbinstance_identifier=\"observability-dev-postgres\"}",
+        "expr": "aws_rds_cpuutilization_average{dbinstance_identifier=\"obs-dev-postgres\"}",
         "legendFormat": "DEV RDS CPU"
       }]
     },
@@ -332,12 +332,12 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "aws_rds_cpuutilization_average{dbinstance_identifier=\"observability-uat-postgres\"}",
+          "expr": "aws_rds_cpuutilization_average{dbinstance_identifier=\"obs-uat-postgres\"}",
           "legendFormat": "UAT RDS CPU"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "aws_rds_cpuutilization_average{dbinstance_identifier=\"observability-dev-postgres\"}",
+          "expr": "aws_rds_cpuutilization_average{dbinstance_identifier=\"obs-dev-postgres\"}",
           "legendFormat": "DEV RDS CPU"
         }
       ]
@@ -358,12 +358,12 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "aws_rds_database_connections_average{dbinstance_identifier=\"observability-uat-postgres\"}",
+          "expr": "aws_rds_database_connections_average{dbinstance_identifier=\"obs-uat-postgres\"}",
           "legendFormat": "UAT Connections"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "aws_rds_database_connections_average{dbinstance_identifier=\"observability-dev-postgres\"}",
+          "expr": "aws_rds_database_connections_average{dbinstance_identifier=\"obs-dev-postgres\"}",
           "legendFormat": "DEV Connections"
         }
       ]
@@ -389,12 +389,12 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "aws_rds_free_storage_space_average{dbinstance_identifier=\"observability-uat-postgres\"}",
+          "expr": "aws_rds_free_storage_space_average{dbinstance_identifier=\"obs-uat-postgres\"}",
           "legendFormat": "UAT Free Storage"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "aws_rds_free_storage_space_average{dbinstance_identifier=\"observability-dev-postgres\"}",
+          "expr": "aws_rds_free_storage_space_average{dbinstance_identifier=\"obs-dev-postgres\"}",
           "legendFormat": "DEV Free Storage"
         }
       ]
@@ -415,22 +415,22 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "aws_rds_read_iops_average{dbinstance_identifier=\"observability-uat-postgres\"}",
+          "expr": "aws_rds_read_iops_average{dbinstance_identifier=\"obs-uat-postgres\"}",
           "legendFormat": "UAT Read IOPS"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "aws_rds_write_iops_average{dbinstance_identifier=\"observability-uat-postgres\"}",
+          "expr": "aws_rds_write_iops_average{dbinstance_identifier=\"obs-uat-postgres\"}",
           "legendFormat": "UAT Write IOPS"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "aws_rds_read_iops_average{dbinstance_identifier=\"observability-dev-postgres\"}",
+          "expr": "aws_rds_read_iops_average{dbinstance_identifier=\"obs-dev-postgres\"}",
           "legendFormat": "DEV Read IOPS"
         },
         {
           "datasource": { "type": "prometheus", "uid": "Prometheus" },
-          "expr": "aws_rds_write_iops_average{dbinstance_identifier=\"observability-dev-postgres\"}",
+          "expr": "aws_rds_write_iops_average{dbinstance_identifier=\"obs-dev-postgres\"}",
           "legendFormat": "DEV Write IOPS"
         }
       ]
