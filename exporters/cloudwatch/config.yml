@@ -1,8 +1,11 @@
-region: us-east-1
+# CloudWatch Exporter Configuration
+# Region: ap-south-1 (Mumbai) — covers UAT and DEV Terraform environments
+# Account: 496251222247
+region: ap-south-1
+
 metrics:
 
-  # ── EC2 — works for ALL instances, no agent needed ─────────────────
-  # Period 300 = 5 min (free tier). Use 60 for detailed monitoring (paid)
+  # ── EC2 — all instances (UAT + DEV ASG instances) ──────────────────
   - aws_namespace: AWS/EC2
     aws_metric_name: CPUUtilization
     aws_dimensions: [InstanceId]
@@ -49,6 +52,166 @@ metrics:
     aws_metric_name: EBSWriteBytes
     aws_dimensions: [InstanceId]
     aws_statistics: [Sum]
+    period_seconds: 300
+
+  # ── Auto Scaling Groups — UAT + DEV ──────────────────────────────────
+  - aws_namespace: AWS/AutoScaling
+    aws_metric_name: GroupInServiceInstances
+    aws_dimensions: [AutoScalingGroupName]
+    aws_statistics: [Average]
+    period_seconds: 60
+
+  - aws_namespace: AWS/AutoScaling
+    aws_metric_name: GroupDesiredCapacity
+    aws_dimensions: [AutoScalingGroupName]
+    aws_statistics: [Average]
+    period_seconds: 60
+
+  - aws_namespace: AWS/AutoScaling
+    aws_metric_name: GroupPendingInstances
+    aws_dimensions: [AutoScalingGroupName]
+    aws_statistics: [Average]
+    period_seconds: 60
+
+  - aws_namespace: AWS/AutoScaling
+    aws_metric_name: GroupTerminatingInstances
+    aws_dimensions: [AutoScalingGroupName]
+    aws_statistics: [Average]
+    period_seconds: 60
+
+  # ── ALB — observability-uat-alb + observability-dev-alb ─────────────
+  - aws_namespace: AWS/ApplicationELB
+    aws_metric_name: RequestCount
+    aws_dimensions: [LoadBalancer]
+    aws_statistics: [Sum]
+    period_seconds: 60
+
+  - aws_namespace: AWS/ApplicationELB
+    aws_metric_name: HTTPCode_Target_2XX_Count
+    aws_dimensions: [LoadBalancer]
+    aws_statistics: [Sum]
+    period_seconds: 60
+
+  - aws_namespace: AWS/ApplicationELB
+    aws_metric_name: HTTPCode_Target_4XX_Count
+    aws_dimensions: [LoadBalancer]
+    aws_statistics: [Sum]
+    period_seconds: 60
+
+  - aws_namespace: AWS/ApplicationELB
+    aws_metric_name: HTTPCode_Target_5XX_Count
+    aws_dimensions: [LoadBalancer]
+    aws_statistics: [Sum]
+    period_seconds: 60
+
+  - aws_namespace: AWS/ApplicationELB
+    aws_metric_name: TargetResponseTime
+    aws_dimensions: [LoadBalancer]
+    aws_statistics: [Average, p99]
+    period_seconds: 60
+
+  - aws_namespace: AWS/ApplicationELB
+    aws_metric_name: HealthyHostCount
+    aws_dimensions: [LoadBalancer, TargetGroup]
+    aws_statistics: [Average]
+    period_seconds: 60
+
+  - aws_namespace: AWS/ApplicationELB
+    aws_metric_name: UnHealthyHostCount
+    aws_dimensions: [LoadBalancer, TargetGroup]
+    aws_statistics: [Average]
+    period_seconds: 60
+
+  - aws_namespace: AWS/ApplicationELB
+    aws_metric_name: ActiveConnectionCount
+    aws_dimensions: [LoadBalancer]
+    aws_statistics: [Sum]
+    period_seconds: 60
+
+  # ── NLB — observability-uat-nlb + observability-dev-nlb ─────────────
+  - aws_namespace: AWS/NetworkELB
+    aws_metric_name: ActiveFlowCount
+    aws_dimensions: [LoadBalancer]
+    aws_statistics: [Average]
+    period_seconds: 60
+
+  - aws_namespace: AWS/NetworkELB
+    aws_metric_name: ProcessedBytes
+    aws_dimensions: [LoadBalancer]
+    aws_statistics: [Sum]
+    period_seconds: 60
+
+  - aws_namespace: AWS/NetworkELB
+    aws_metric_name: HealthyHostCount
+    aws_dimensions: [LoadBalancer, TargetGroup]
+    aws_statistics: [Average]
+    period_seconds: 60
+
+  - aws_namespace: AWS/NetworkELB
+    aws_metric_name: UnHealthyHostCount
+    aws_dimensions: [LoadBalancer, TargetGroup]
+    aws_statistics: [Average]
+    period_seconds: 60
+
+  # ── RDS PostgreSQL — observability-uat-postgres + observability-dev-postgres
+  - aws_namespace: AWS/RDS
+    aws_metric_name: CPUUtilization
+    aws_dimensions: [DBInstanceIdentifier]
+    aws_statistics: [Average, Maximum]
+    period_seconds: 300
+
+  - aws_namespace: AWS/RDS
+    aws_metric_name: DatabaseConnections
+    aws_dimensions: [DBInstanceIdentifier]
+    aws_statistics: [Average, Maximum]
+    period_seconds: 60
+
+  - aws_namespace: AWS/RDS
+    aws_metric_name: FreeStorageSpace
+    aws_dimensions: [DBInstanceIdentifier]
+    aws_statistics: [Average]
+    period_seconds: 300
+
+  - aws_namespace: AWS/RDS
+    aws_metric_name: FreeableMemory
+    aws_dimensions: [DBInstanceIdentifier]
+    aws_statistics: [Average]
+    period_seconds: 300
+
+  - aws_namespace: AWS/RDS
+    aws_metric_name: ReadIOPS
+    aws_dimensions: [DBInstanceIdentifier]
+    aws_statistics: [Average]
+    period_seconds: 60
+
+  - aws_namespace: AWS/RDS
+    aws_metric_name: WriteIOPS
+    aws_dimensions: [DBInstanceIdentifier]
+    aws_statistics: [Average]
+    period_seconds: 60
+
+  - aws_namespace: AWS/RDS
+    aws_metric_name: ReadLatency
+    aws_dimensions: [DBInstanceIdentifier]
+    aws_statistics: [Average]
+    period_seconds: 60
+
+  - aws_namespace: AWS/RDS
+    aws_metric_name: WriteLatency
+    aws_dimensions: [DBInstanceIdentifier]
+    aws_statistics: [Average]
+    period_seconds: 60
+
+  - aws_namespace: AWS/RDS
+    aws_metric_name: NetworkReceiveThroughput
+    aws_dimensions: [DBInstanceIdentifier]
+    aws_statistics: [Average]
+    period_seconds: 300
+
+  - aws_namespace: AWS/RDS
+    aws_metric_name: NetworkTransmitThroughput
+    aws_dimensions: [DBInstanceIdentifier]
+    aws_statistics: [Average]
     period_seconds: 300
 
   # ── ECS ─────────────────────────────────────────────────────────────
@@ -111,50 +274,5 @@ metrics:
   - aws_namespace: AWS/ApiGateway
     aws_metric_name: Latency
     aws_dimensions: [ApiName, Stage]
-    aws_statistics: [Average]
-    period_seconds: 60
-
-  # ── ALB ─────────────────────────────────────────────────────────────
-  - aws_namespace: AWS/ApplicationELB
-    aws_metric_name: RequestCount
-    aws_dimensions: [LoadBalancer]
-    aws_statistics: [Sum]
-    period_seconds: 60
-
-  - aws_namespace: AWS/ApplicationELB
-    aws_metric_name: HTTPCode_Target_4XX_Count
-    aws_dimensions: [LoadBalancer]
-    aws_statistics: [Sum]
-    period_seconds: 60
-
-  - aws_namespace: AWS/ApplicationELB
-    aws_metric_name: HTTPCode_Target_5XX_Count
-    aws_dimensions: [LoadBalancer]
-    aws_statistics: [Sum]
-    period_seconds: 60
-
-  - aws_namespace: AWS/ApplicationELB
-    aws_metric_name: TargetResponseTime
-    aws_dimensions: [LoadBalancer]
-    aws_statistics: [Average]
-    period_seconds: 60
-
-  # ── RDS ─────────────────────────────────────────────────────────────
-  - aws_namespace: AWS/RDS
-    aws_metric_name: CPUUtilization
-    aws_dimensions: [DBInstanceIdentifier]
-    aws_statistics: [Average]
-    period_seconds: 300
-
-  - aws_namespace: AWS/RDS
-    aws_metric_name: DatabaseConnections
-    aws_dimensions: [DBInstanceIdentifier]
-    aws_statistics: [Average]
-    period_seconds: 60
-
-  # ── SQS ─────────────────────────────────────────────────────────────
-  - aws_namespace: AWS/SQS
-    aws_metric_name: ApproximateNumberOfMessagesVisible
-    aws_dimensions: [QueueName]
     aws_statistics: [Average]
     period_seconds: 60

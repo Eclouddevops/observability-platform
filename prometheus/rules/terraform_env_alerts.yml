@@ -1,0 +1,129 @@
+###############################################################################
+# Alert Rules — UAT and DEV Terraform Environments (ap-south-1)
+###############################################################################
+
+groups:
+
+  # ── EC2 Instance Alerts ──────────────────────────────────────────────────
+  - name: terraform_ec2_alerts
+    interval: 30s
+    rules:
+
+      - alert: TerraformEC2InstanceDown
+        expr: ec2_instance_running{env=~"uat|dev"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "EC2 instance down in {{ $labels.env }}"
+          description: "Instance {{ $labels.instance_id }} ({{ $labels.az }}) in {{ $labels.env }} has been stopped for 2+ minutes."
+
+      - alert: TerraformEC2HighCPU
+        expr: ec2_cpu_percent{env=~"uat|dev"} > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU on EC2 in {{ $labels.env }}"
+          description: "Instance {{ $labels.instance_id }} in {{ $labels.env }} CPU is {{ $value | printf \"%.1f\" }}% for 5+ minutes."
+
+      - alert: TerraformEC2CriticalCPU
+        expr: ec2_cpu_percent{env=~"uat|dev"} > 95
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical CPU on EC2 in {{ $labels.env }}"
+          description: "Instance {{ $labels.instance_id }} in {{ $labels.env }} CPU is {{ $value | printf \"%.1f\" }}% — immediate action required."
+
+      - alert: TerraformEC2StatusCheckFailing
+        expr: ec2_status_check_ok{env=~"uat|dev"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "EC2 status check failing in {{ $labels.env }}"
+          description: "Instance {{ $labels.instance_id }} in {{ $labels.env }}/{{ $labels.az }} is failing status checks."
+
+  # ── ASG Health Alerts ────────────────────────────────────────────────────
+  - name: terraform_asg_alerts
+    interval: 60s
+    rules:
+
+      - alert: TerraformASGBelowDesired
+        expr: |
+          sum by (env) (ec2_instance_running{env=~"uat|dev"}) < 4
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ASG below desired capacity in {{ $labels.env }}"
+          description: "{{ $labels.env }} ASG has only {{ $value }} running instances (desired: 4)."
+
+      - alert: TerraformASGNoInstances
+        expr: |
+          sum by (env) (ec2_instance_running{env=~"uat|dev"}) == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No running EC2 instances in {{ $labels.env }}"
+          description: "All EC2 instances in {{ $labels.env }} are down!"
+
+  # ── ALB Health Alerts ─────────────────────────────────────────────────────
+  - name: terraform_alb_alerts
+    interval: 30s
+    rules:
+
+      - alert: TerraformALBDown
+        expr: probe_success{job=~"blackbox-uat-alb|blackbox-dev-alb"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "ALB not responding in {{ $labels.environment }}"
+          description: "ALB endpoint {{ $labels.instance }} in {{ $labels.environment }} is not returning HTTP 2xx."
+
+      - alert: TerraformALBHighLatency
+        expr: probe_duration_seconds{job=~"blackbox-uat-alb|blackbox-dev-alb"} > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ALB high latency in {{ $labels.environment }}"
+          description: "ALB {{ $labels.instance }} in {{ $labels.environment }} response time is {{ $value | printf \"%.2f\" }}s."
+
+  # ── RDS Alerts (via CloudWatch) ──────────────────────────────────────────
+  - name: terraform_rds_alerts
+    interval: 60s
+    rules:
+
+      - alert: TerraformRDSHighCPU
+        expr: |
+          aws_rds_cpuutilization_average{dbinstance_identifier=~"observability-(uat|dev)-postgres"} > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RDS high CPU on {{ $labels.dbinstance_identifier }}"
+          description: "RDS instance {{ $labels.dbinstance_identifier }} CPU is {{ $value | printf \"%.1f\" }}%."
+
+      - alert: TerraformRDSLowStorage
+        expr: |
+          aws_rds_free_storage_space_average{dbinstance_identifier=~"observability-(uat|dev)-postgres"} < 2147483648
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RDS low storage on {{ $labels.dbinstance_identifier }}"
+          description: "RDS {{ $labels.dbinstance_identifier }} has less than 2GB free storage."
+
+      - alert: TerraformRDSHighConnections
+        expr: |
+          aws_rds_database_connections_average{dbinstance_identifier=~"observability-(uat|dev)-postgres"} > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RDS high connections on {{ $labels.dbinstance_identifier }}"
+          description: "RDS {{ $labels.dbinstance_identifier }} has {{ $value }} connections."

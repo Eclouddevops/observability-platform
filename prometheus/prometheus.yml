@@ -20,8 +20,9 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  # ── Node Exporter container (port 9100 internally) ───────────────
-  # Also reads /textfiles/ec2_metrics.prom via textfile_collector
+  # ── Node Exporter container ───────────────────────────────────────
+  # Reads /textfiles/ec2_metrics.prom via textfile_collector
+  # ec2_metrics.prom contains ALL UAT + DEV EC2 metrics auto-discovered
   - job_name: 'node-exporter'
     static_configs:
       - targets: ['node-exporter:9100']
@@ -33,9 +34,8 @@ scrape_configs:
     static_configs:
       - targets: ['cadvisor:8080']
 
-  # ── CloudWatch Exporter ──────────────────────────────────────────
-  # Already producing: aws_ec2_cpuutilization_average etc.
-  # honor_labels: true keeps the job="aws_ec2" label set by the exporter
+  # ── CloudWatch Exporter — ap-south-1 (UAT + DEV) ─────────────────
+  # Produces aws_ec2_* ALB, RDS, ASG metrics from Mumbai region
   - job_name: 'cloudwatch'
     scrape_interval: 60s
     scrape_timeout: 55s
@@ -43,7 +43,7 @@ scrape_configs:
     static_configs:
       - targets: ['cloudwatch-exporter:9106']
 
-  # ── Blackbox HTTP probing ─────────────────────────────────────────
+  # ── Blackbox HTTP probing — general websites ──────────────────────
   - job_name: 'blackbox-http'
     metrics_path: /probe
     params:
@@ -59,6 +59,49 @@ scrape_configs:
         target_label: instance
       - target_label: __address__
         replacement: blackbox-exporter:9115
+
+  # ── Blackbox HTTP — UAT ALB health check ─────────────────────────
+  # File is auto-updated by the deploy.sh script after terraform apply
+  - job_name: 'blackbox-uat-alb'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/targets/uat_alb_targets.yml
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+      - target_label: environment
+        replacement: uat
+      - target_label: region
+        replacement: ap-south-1
+
+  # ── Blackbox HTTP — DEV ALB health check ─────────────────────────
+  - job_name: 'blackbox-dev-alb'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/targets/dev_alb_targets.yml
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+      - target_label: environment
+        replacement: dev
+      - target_label: region
+        replacement: ap-south-1
 
   # ── SSL Certificate Expiry ────────────────────────────────────────
   - job_name: 'ssl-certificates'
@@ -112,6 +155,9 @@ scrape_configs:
       - targets: ['ai-observability-agent:8888']
 
   # ── Auto-Discovery Agent ─────────────────────────────────────────
+  # Writes ec2_metrics.prom every 2 min covering ap-south-1
+  # UAT instances: env="uat"  |  DEV instances: env="dev"
+  # All tagged ManagedBy=terraform are automatically included
   - job_name: 'auto-discovery'
     static_configs:
       - targets: ['ec2-auto-discovery:9877']

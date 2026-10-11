@@ -178,7 +178,7 @@ services:
     volumes:
       - ./exporters/cloudwatch/config.yml:/config/config.yml:ro
     environment:
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-ap-south-1}
     networks:
       - monitoring
 
@@ -217,12 +217,15 @@ services:
     ports:
       - "9877:9877"
     environment:
-      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
-      - AWS_REGIONS=${AWS_REGIONS:-us-east-1}
+      # Mumbai region — home of UAT and DEV Terraform environments
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-ap-south-1}
+      - AWS_REGIONS=${AWS_REGIONS:-ap-south-1}
       - DISCOVERY_INTERVAL_MINUTES=${DISCOVERY_INTERVAL_MINUTES:-2}
       - PRIMARY_ACCOUNT_NAME=${PRIMARY_ACCOUNT_NAME:-production}
-      - TAG_FILTER_KEY=${TAG_FILTER_KEY:-}
-      - TAG_FILTER_VALUE=${TAG_FILTER_VALUE:-true}
+      # Filter by ManagedBy=terraform to show only Terraform-created instances
+      # Leave TAG_FILTER_KEY blank to show ALL instances in the region
+      - TAG_FILTER_KEY=${TAG_FILTER_KEY:-ManagedBy}
+      - TAG_FILTER_VALUE=${TAG_FILTER_VALUE:-terraform}
       - MSTEAMS_WEBHOOK_URL=${MSTEAMS_WEBHOOK_URL:-}
       - PROM_TEXTFILE_DIR=/textfiles
     volumes:

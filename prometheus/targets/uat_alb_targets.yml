@@ -1,0 +1,19 @@
+# UAT ALB Targets — ap-south-1
+# ─────────────────────────────────────────────────────────────────
+# This file is automatically updated by terraform/deploy.sh after
+# every terraform apply for the UAT environment.
+#
+# To update manually after terraform apply:
+#   cd terraform/environments/uat
+#   ALB=$(terraform output -raw alb_dns_name)
+#   sed -i "s|REPLACE_WITH_UAT_ALB|$ALB|g" \
+#     ../../prometheus/targets/uat_alb_targets.yml
+#
+# ─────────────────────────────────────────────────────────────────
+- targets:
+    - "REPLACE_WITH_UAT_ALB"    # e.g. observability-uat-alb-xxx.ap-south-1.elb.amazonaws.com
+  labels:
+    environment: "uat"
+    region:      "ap-south-1"
+    tier:        "alb"
+    project:     "observability"
