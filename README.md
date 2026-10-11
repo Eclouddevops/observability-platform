@@ -30,7 +30,7 @@ git clone https://github.com/<you>/observability-platform.git
 cd observability-platform
 cp .env.example .env
 # Edit .env with your credentials
-nano .env
+vim .env
 sudo bash scripts/install.sh
 ```
 
@@ -218,8 +218,8 @@ Then configure `AWS_ROLE_ARN` in `.env` to assume the role.
 
 ```bash
 # Make changes to dashboards, rules, or targets
-nano grafana/dashboards/01-ec2-nodes.json
-nano prometheus/targets/ec2_nodes.yml
+vim grafana/dashboards/01-ec2-nodes.json
+vim prometheus/targets/ec2_nodes.yml
 
 # Commit and push → GitHub Actions auto-deploys
 git add .

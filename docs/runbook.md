@@ -317,7 +317,7 @@ sudo certbot renew --dry-run
 sudo certbot renew
 
 # Step 4 — Update ssl_targets.yml if new domain added
-nano prometheus/targets/ssl_targets.yml
+vim prometheus/targets/ssl_targets.yml
 curl -X POST http://localhost:9090/-/reload
 ```
 
@@ -382,7 +382,7 @@ docker stats --no-stream
 
 # Step 4 — If auto-discovery is scanning too fast, slow it down
 # Edit .env: DISCOVERY_INTERVAL_MINUTES=5
-nano .env
+vim .env
 docker compose restart auto-discovery
 ```
 
@@ -431,7 +431,7 @@ du -sh /var/lib/docker/volumes/*prometheus*
 # Step 6 — If critical, reduce Prometheus retention
 # Edit docker-compose.yml:
 #   --storage.tsdb.retention.time=15d  (reduce from 30d)
-nano docker-compose.yml
+vim docker-compose.yml
 docker compose restart prometheus
 ```
 
@@ -498,7 +498,7 @@ curl -s "http://localhost:9090/api/v1/query?query=up{instance='<private-ip>:9100
 
 ```bash
 # Edit websites.yml
-nano prometheus/targets/websites.yml
+vim prometheus/targets/websites.yml
 
 # Add entry:
 # - targets:
@@ -508,7 +508,7 @@ nano prometheus/targets/websites.yml
 #     service: website
 
 # Edit ssl_targets.yml (for SSL expiry check)
-nano prometheus/targets/ssl_targets.yml
+vim prometheus/targets/ssl_targets.yml
 
 # Add entry:
 # - targets:
@@ -530,7 +530,7 @@ curl -X POST http://localhost:9090/-/reload
 #    Permissions: ObservabilityPlatformPolicy
 
 # 2. Add to .env
-nano .env
+vim .env
 
 # Append to AWS_ACCOUNTS:
 # AWS_ACCOUNTS=[
