@@ -14,22 +14,22 @@
     category: main
     owner: eclouddevops
 
-# ── UAT Website (EC2) ──────────────────────────────────────────────────
-# Replace the placeholder below with your actual UAT EC2 URL or IP
+# ── UAT Website (EC2 — Apache HTTP) ───────────────────────────────────
+# After running:  bash scripts/setup-apache-env.sh <uat-ip> uat [key|ssm]
+# Replace <uat-ec2-public-ip> with the actual IP printed by that script.
 - targets:
-    - 'http://uat.aiobz.com'          # UAT subdomain — replace with actual URL
-    # - 'http://<uat-ec2-public-ip>'  # Alternatively, use EC2 public IP + port
+    - 'http://<uat-ec2-public-ip>/health.html'  # ← replace with UAT EC2 IP
   labels:
     env: uat
     service: website
     category: main
     owner: eclouddevops
 
-# ── Dev Website (EC2) ──────────────────────────────────────────────────
-# Replace the placeholder below with your actual Dev EC2 URL or IP
+# ── Dev Website (EC2 — Apache HTTP) ───────────────────────────────────
+# After running:  bash scripts/setup-apache-env.sh <dev-ip> dev [key|ssm]
+# Replace <dev-ec2-public-ip> with the actual IP printed by that script.
 - targets:
-    - 'http://dev.aiobz.com'          # Dev subdomain — replace with actual URL
-    # - 'http://<dev-ec2-public-ip>'  # Alternatively, use EC2 public IP + port
+    - 'http://<dev-ec2-public-ip>/health.html'  # ← replace with Dev EC2 IP
   labels:
     env: dev
     service: website
