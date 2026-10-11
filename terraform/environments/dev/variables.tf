@@ -3,8 +3,15 @@
 ###############################################################################
 
 variable "project" {
-  type    = string
-  default = "observability"
+  description = "Short project prefix used in all resource names"
+  type        = string
+  default     = "obs"
+}
+
+variable "environment" {
+  description = "Environment name (uat | dev)"
+  type        = string
+  default     = "dev"
 }
 
 variable "aws_region" {
@@ -20,9 +27,8 @@ variable "aws_account_id" {
 # ── Networking ───────────────────────────────────────────────────────────────
 
 variable "vpc_cidr" {
-  description = "CIDR for the NEW DEV VPC"
-  type        = string
-  default     = "10.1.0.0/16"
+  type    = string
+  default = "10.1.0.0/16"
 }
 
 variable "availability_zones" {
@@ -128,12 +134,12 @@ variable "multi_az" {
 
 variable "deletion_protection" {
   type    = bool
-  default = false   # less strict for DEV
+  default = false
 }
 
 variable "skip_final_snapshot" {
   type    = bool
-  default = true   # DEV can skip
+  default = true
 }
 
 variable "backup_retention_days" {

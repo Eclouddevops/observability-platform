@@ -1,29 +1,31 @@
 ###############################################################################
-# DEV Environment — Root Module
+# DEV Environment
+# Region  : ap-south-1 (Mumbai)
+# Account : 496251222247
+# VPC     : NEW VPC 10.1.0.0/16
 #
-# Creates a BRAND NEW VPC and all infrastructure from scratch.
-# CIDR range 10.1.0.0/16 (does not conflict with UAT 10.0.0.0/x)
+# Resource naming: obs-dev-<resource>
+#   obs-dev-asg, obs-dev-alb, obs-dev-nlb, obs-dev-postgres
 ###############################################################################
 
 locals {
-  environment = "dev"
-
   common_tags = {
     Project     = var.project
-    Environment = local.environment
+    Environment = var.environment
     ManagedBy   = "terraform"
+    Region      = var.aws_region
     CostCenter  = "platform-engineering"
   }
 }
 
 ###############################################################################
-# 1. Networking — brand-new VPC
+# 1. Networking — brand-new VPC + subnets
 ###############################################################################
 module "networking" {
   source = "../../modules/networking"
 
   project     = var.project
-  environment = local.environment
+  environment = var.environment
   aws_region  = var.aws_region
 
   use_existing_vpc     = false
@@ -43,7 +45,7 @@ module "security" {
   source = "../../modules/security"
 
   project     = var.project
-  environment = local.environment
+  environment = var.environment
 
   vpc_id            = module.networking.vpc_id
   vpc_cidr          = module.networking.vpc_cidr
@@ -54,35 +56,34 @@ module "security" {
 }
 
 ###############################################################################
-# 3. Secrets Manager — RDS credentials
+# 3. Secrets Manager — auto-generated RDS password
 ###############################################################################
 module "secrets" {
   source = "../../modules/secrets"
 
   project     = var.project
-  environment = local.environment
+  environment = var.environment
 
   db_identifier           = "primary"
   db_username             = var.db_username
   db_name                 = var.db_name
-  recovery_window_in_days = 0   # immediate deletion allowed in DEV
+  recovery_window_in_days = 0
 
   common_tags = local.common_tags
 }
 
 ###############################################################################
-# 4. RDS PostgreSQL
+# 4. RDS PostgreSQL — private subnets only
 ###############################################################################
 module "rds" {
   source = "../../modules/rds"
 
   project     = var.project
-  environment = local.environment
+  environment = var.environment
 
-  private_subnet_ids = module.networking.private_subnet_ids
-  rds_sg_id          = module.security.rds_sg_id
-  db_secret_arn      = module.secrets.secret_arn
-
+  private_subnet_ids      = module.networking.private_subnet_ids
+  rds_sg_id               = module.security.rds_sg_id
+  db_secret_arn           = module.secrets.secret_arn
   postgres_major_version  = var.postgres_major_version
   postgres_engine_version = var.postgres_engine_version
   rds_instance_class      = var.rds_instance_class
@@ -98,20 +99,19 @@ module "rds" {
 }
 
 ###############################################################################
-# 5. Load Balancers (ALB + NLB)
+# 5. Load Balancers — ALB + NLB
 ###############################################################################
 module "loadbalancer" {
   source = "../../modules/loadbalancer"
 
   project        = var.project
-  environment    = local.environment
+  environment    = var.environment
   aws_account_id = var.aws_account_id
   aws_region     = var.aws_region
 
-  vpc_id            = module.networking.vpc_id
-  public_subnet_ids = module.networking.public_subnet_ids
-  alb_sg_id         = module.security.alb_sg_id
-
+  vpc_id              = module.networking.vpc_id
+  public_subnet_ids   = module.networking.public_subnet_ids
+  alb_sg_id           = module.security.alb_sg_id
   app_port            = var.app_port
   nlb_port            = var.app_port
   health_check_path   = var.health_check_path
@@ -122,13 +122,13 @@ module "loadbalancer" {
 }
 
 ###############################################################################
-# 6. Compute — ASG with Launch Template
+# 6. Compute — Launch Template + ASG (4 EC2 t2.micro instances)
 ###############################################################################
 module "compute" {
   source = "../../modules/compute"
 
   project     = var.project
-  environment = local.environment
+  environment = var.environment
   aws_region  = var.aws_region
 
   private_subnet_ids     = module.networking.private_subnet_ids
@@ -138,9 +138,8 @@ module "compute" {
   read_secret_policy_arn = module.secrets.read_secret_policy_arn
   db_secret_name         = module.secrets.secret_name
 
-  ami_id        = var.ami_id
-  instance_type = var.instance_type
-
+  ami_id               = var.ami_id
+  instance_type        = var.instance_type
   asg_desired_capacity = var.asg_desired_capacity
   asg_min_size         = var.asg_min_size
   asg_max_size         = var.asg_max_size

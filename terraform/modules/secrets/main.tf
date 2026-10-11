@@ -1,18 +1,19 @@
 ###############################################################################
 # Module: secrets
 # Stores RDS credentials in AWS Secrets Manager.
-# A random password is generated on first apply; never hardcoded.
+# Auto-generates a strong password — never hardcoded.
+# Secret name: obs-uat/rds/primary  or  obs-dev/rds/primary
 ###############################################################################
 
 locals {
-  name_prefix   = "${var.project}-${var.environment}"
-  secret_name   = "${local.name_prefix}/rds/${var.db_identifier}"
+  name_prefix = "${var.project}-${var.environment}"
+  secret_name = "${local.name_prefix}/rds/${var.db_identifier}"
 }
 
 resource "random_password" "db" {
   length           = 32
   special          = true
-  override_special = "!#$%&*()-_=+[]{}<>:?"  # excludes @, /, " which break pg conn strings
+  override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 resource "aws_secretsmanager_secret" "db" {
@@ -32,14 +33,14 @@ resource "aws_secretsmanager_secret_version" "db" {
     username = var.db_username
     password = random_password.db.result
     engine   = "postgres"
-    host     = var.db_host      # populated after RDS is created (use depends_on)
+    host     = ""
     port     = var.db_port
     dbname   = var.db_name
   })
 }
 
 ###############################################################################
-# IAM policy allowing EC2 instances to read only this secret
+# IAM policy — EC2 instances can read ONLY this secret
 ###############################################################################
 data "aws_iam_policy_document" "read_secret" {
   statement {

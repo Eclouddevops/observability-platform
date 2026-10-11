@@ -1,14 +1,16 @@
 ###############################################################################
 # DEV Environment — Variable Values
-# Apply: terraform apply -var-file="dev.tfvars"
+# Region  : ap-south-1 (Mumbai)
+# Account : 496251222247
+# VPC     : NEW VPC (10.1.0.0/16) — created fresh
 ###############################################################################
 
-project        = "obs-dev"
+project        = "obs"
+environment    = "dev"
 aws_region     = "ap-south-1"
 aws_account_id = "496251222247"
 
 # ── Networking ───────────────────────────────────────────────────────────────
-# Brand new VPC — CIDR must not overlap with UAT (10.0.0.0/x)
 vpc_cidr           = "10.1.0.0/16"
 availability_zones = ["ap-south-1a", "ap-south-1b"]
 
