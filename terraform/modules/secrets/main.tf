@@ -1,30 +1,18 @@
 ###############################################################################
-# Module: secrets
-# Stores RDS credentials in AWS Secrets Manager.
-# Auto-generates a strong password — never hardcoded.
-# Secret name: obs-uat/rds/primary  or  obs-dev/rds/primary
+# Module: secrets — auto-generated DB password in Secrets Manager
 ###############################################################################
 
-locals {
-  name_prefix = "${var.project}-${var.environment}"
-  secret_name = "${local.name_prefix}/rds/${var.db_identifier}"
-}
-
 resource "random_password" "db" {
-  length           = 32
+  length           = 24
   special          = true
-  override_special = "!#$%&*()-_=+[]{}<>:?"
+  override_special = "!#$%&*-_=+?"
 }
 
 resource "aws_secretsmanager_secret" "db" {
-  name                    = local.secret_name
-  description             = "RDS PostgreSQL credentials for ${local.name_prefix}"
-  recovery_window_in_days = var.recovery_window_in_days
-
-  tags = merge(var.common_tags, {
-    Name        = local.secret_name
-    Environment = var.environment
-  })
+  name                    = "${var.env_name}/rds/primary"
+  description             = "RDS credentials for ${var.env_name}"
+  recovery_window_in_days = 0   # immediate delete — allows clean destroy
+  tags                    = merge(var.common_tags, { Name = "${var.env_name}/rds/primary" })
 }
 
 resource "aws_secretsmanager_secret_version" "db" {
@@ -33,30 +21,23 @@ resource "aws_secretsmanager_secret_version" "db" {
     username = var.db_username
     password = random_password.db.result
     engine   = "postgres"
-    host     = ""
-    port     = var.db_port
+    port     = 5432
     dbname   = var.db_name
+    host     = ""   # updated by RDS module after instance is created
   })
 }
 
-###############################################################################
-# IAM policy — EC2 instances can read ONLY this secret
-###############################################################################
+# IAM policy — EC2 instances read ONLY this secret
 data "aws_iam_policy_document" "read_secret" {
   statement {
-    sid    = "AllowReadSecret"
-    effect = "Allow"
-    actions = [
-      "secretsmanager:GetSecretValue",
-      "secretsmanager:DescribeSecret"
-    ]
+    effect    = "Allow"
+    actions   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
     resources = [aws_secretsmanager_secret.db.arn]
   }
 }
 
 resource "aws_iam_policy" "read_secret" {
-  name        = "${local.name_prefix}-read-db-secret"
-  description = "Allow reading the RDS secret for ${local.name_prefix}"
-  policy      = data.aws_iam_policy_document.read_secret.json
-  tags        = var.common_tags
+  name   = "${var.env_name}-read-db-secret"
+  policy = data.aws_iam_policy_document.read_secret.json
+  tags   = var.common_tags
 }

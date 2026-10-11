@@ -1,148 +1,91 @@
 ###############################################################################
 # DEV Environment
-# Region  : ap-south-1 (Mumbai)
-# Account : 496251222247
-# VPC     : NEW VPC 10.1.0.0/16
-#
-# Resource naming: obs-dev-<resource>
-#   obs-dev-asg, obs-dev-alb, obs-dev-nlb, obs-dev-postgres
+# All resources named: obs-dev-<resource>
+# VPC: NEW 10.1.0.0/16 — fully isolated from UAT
 ###############################################################################
 
 locals {
-  common_tags = {
-    Project     = var.project
-    Environment = var.environment
+  env_name = "obs-dev"
+  tags = {
+    Project     = "observability"
+    Environment = "dev"
+    EnvName     = local.env_name
     ManagedBy   = "terraform"
-    Region      = var.aws_region
+    Region      = "ap-south-1"
     CostCenter  = "platform-engineering"
   }
 }
 
-###############################################################################
-# 1. Networking — brand-new VPC + subnets
-###############################################################################
 module "networking" {
-  source = "../../modules/networking"
-
-  project     = var.project
-  environment = var.environment
-  aws_region  = var.aws_region
-
+  source               = "../../modules/networking"
+  env_name             = local.env_name
   use_existing_vpc     = false
   vpc_cidr             = var.vpc_cidr
   availability_zones   = var.availability_zones
   public_subnet_cidrs  = var.public_subnet_cidrs
   private_subnet_cidrs = var.private_subnet_cidrs
-  enable_nat_gateway   = var.enable_nat_gateway
-
-  common_tags = local.common_tags
+  enable_nat_gateway   = true
+  common_tags          = local.tags
 }
 
-###############################################################################
-# 2. Security Groups
-###############################################################################
 module "security" {
-  source = "../../modules/security"
-
-  project     = var.project
-  environment = var.environment
-
-  vpc_id            = module.networking.vpc_id
-  vpc_cidr          = module.networking.vpc_cidr
-  app_port          = var.app_port
-  ssh_allowed_cidrs = var.ssh_allowed_cidrs
-
-  common_tags = local.common_tags
+  source      = "../../modules/security"
+  env_name    = local.env_name
+  vpc_id      = module.networking.vpc_id
+  vpc_cidr    = module.networking.vpc_cidr
+  app_port    = var.app_port
+  common_tags = local.tags
 }
 
-###############################################################################
-# 3. Secrets Manager — auto-generated RDS password
-###############################################################################
 module "secrets" {
-  source = "../../modules/secrets"
-
-  project     = var.project
-  environment = var.environment
-
-  db_identifier           = "primary"
-  db_username             = var.db_username
-  db_name                 = var.db_name
-  recovery_window_in_days = 0
-
-  common_tags = local.common_tags
+  source      = "../../modules/secrets"
+  env_name    = local.env_name
+  db_username = var.db_username
+  db_name     = var.db_name
+  common_tags = local.tags
 }
 
-###############################################################################
-# 4. RDS PostgreSQL — private subnets only
-###############################################################################
 module "rds" {
-  source = "../../modules/rds"
-
-  project     = var.project
-  environment = var.environment
-
-  private_subnet_ids      = module.networking.private_subnet_ids
-  rds_sg_id               = module.security.rds_sg_id
-  db_secret_arn           = module.secrets.secret_arn
-  postgres_major_version  = var.postgres_major_version
-  postgres_engine_version = var.postgres_engine_version
-  rds_instance_class      = var.rds_instance_class
-  allocated_storage       = var.allocated_storage
-  multi_az                = var.multi_az
-  deletion_protection     = var.deletion_protection
-  skip_final_snapshot     = var.skip_final_snapshot
-  backup_retention_days   = var.backup_retention_days
-
-  common_tags = local.common_tags
-
-  depends_on = [module.secrets]
+  source                = "../../modules/rds"
+  env_name              = local.env_name
+  private_subnet_ids    = module.networking.private_subnet_ids
+  rds_sg_id             = module.security.rds_sg_id
+  secret_arn            = module.secrets.secret_arn
+  instance_class        = var.rds_instance_class
+  allocated_storage     = var.allocated_storage
+  backup_retention_days = var.backup_retention_days
+  common_tags           = local.tags
+  depends_on            = [module.secrets]
 }
 
-###############################################################################
-# 5. Load Balancers — ALB + NLB
-###############################################################################
 module "loadbalancer" {
-  source = "../../modules/loadbalancer"
-
-  project        = var.project
-  environment    = var.environment
-  aws_account_id = var.aws_account_id
-  aws_region     = var.aws_region
-
-  vpc_id              = module.networking.vpc_id
-  public_subnet_ids   = module.networking.public_subnet_ids
-  alb_sg_id           = module.security.alb_sg_id
-  app_port            = var.app_port
-  nlb_port            = var.app_port
-  health_check_path   = var.health_check_path
-  https_enabled       = var.https_enabled
-  acm_certificate_arn = var.acm_certificate_arn
-
-  common_tags = local.common_tags
+  source            = "../../modules/loadbalancer"
+  env_name          = local.env_name
+  aws_account_id    = var.aws_account_id
+  vpc_id            = module.networking.vpc_id
+  public_subnet_ids = module.networking.public_subnet_ids
+  alb_sg_id         = module.security.alb_sg_id
+  app_port          = var.app_port
+  health_check_path = var.health_check_path
+  common_tags       = local.tags
 }
 
-###############################################################################
-# 6. Compute — Launch Template + ASG (4 EC2 t2.micro instances)
-###############################################################################
 module "compute" {
-  source = "../../modules/compute"
-
-  project     = var.project
-  environment = var.environment
-  aws_region  = var.aws_region
-
+  source                 = "../../modules/compute"
+  env_name               = local.env_name
+  environment            = "dev"
+  aws_region             = var.aws_region
   private_subnet_ids     = module.networking.private_subnet_ids
   ec2_sg_id              = module.security.ec2_sg_id
   alb_target_group_arn   = module.loadbalancer.alb_target_group_arn
   nlb_target_group_arn   = module.loadbalancer.nlb_target_group_arn
   read_secret_policy_arn = module.secrets.read_secret_policy_arn
   db_secret_name         = module.secrets.secret_name
-
-  ami_id               = var.ami_id
-  instance_type        = var.instance_type
-  asg_desired_capacity = var.asg_desired_capacity
-  asg_min_size         = var.asg_min_size
-  asg_max_size         = var.asg_max_size
-
-  common_tags = local.common_tags
+  instance_type          = var.instance_type
+  ami_id                 = var.ami_id
+  asg_desired            = var.asg_desired_capacity
+  asg_min                = var.asg_min_size
+  asg_max                = var.asg_max_size
+  app_port               = var.app_port
+  common_tags            = local.tags
 }

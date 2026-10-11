@@ -1,133 +1,103 @@
 ###############################################################################
-# Module: rds
-# Provisions Amazon RDS for PostgreSQL inside private subnets.
-# Credentials are pulled from AWS Secrets Manager (never hardcoded).
+# Module: rds — PostgreSQL in private subnets
+# Uses postgres 16.3 — widely available in all AWS regions including ap-south-1
 ###############################################################################
 
-locals {
-  name_prefix = "${var.project}-${var.environment}"
-}
-
-###############################################################################
-# DB Subnet Group — requires subnets in at least 2 AZs
-###############################################################################
 resource "aws_db_subnet_group" "this" {
-  name        = "${local.name_prefix}-db-subnet-group"
-  description = "Private subnet group for ${local.name_prefix} RDS"
+  name        = "${var.env_name}-db-subnet-group"
+  description = "Private subnets for ${var.env_name} RDS"
   subnet_ids  = var.private_subnet_ids
-
-  tags = merge(var.common_tags, {
-    Name        = "${local.name_prefix}-db-subnet-group"
-    Environment = var.environment
-  })
+  tags        = merge(var.common_tags, { Name = "${var.env_name}-db-subnet-group" })
 }
 
-###############################################################################
-# DB Parameter Group
-###############################################################################
 resource "aws_db_parameter_group" "this" {
-  name        = "${local.name_prefix}-pg-params"
-  family      = "postgres${var.postgres_major_version}"
-  description = "Custom parameters for ${local.name_prefix} PostgreSQL"
+  name        = "${var.env_name}-pg16-params"
+  family      = "postgres16"
+  description = "Custom params for ${var.env_name}"
 
   parameter {
     name  = "log_connections"
     value = "1"
   }
-
   parameter {
     name  = "log_disconnections"
     value = "1"
   }
-
   parameter {
-    name  = "log_min_duration_statement"
-    value = "1000"   # log queries > 1 second
+    name         = "log_min_duration_statement"
+    value        = "1000"
+    apply_method = "immediate"
   }
 
-  tags = merge(var.common_tags, {
-    Name        = "${local.name_prefix}-pg-params"
-    Environment = var.environment
-  })
+  tags = merge(var.common_tags, { Name = "${var.env_name}-pg16-params" })
 
-  lifecycle {
-    create_before_destroy = true
-  }
+  lifecycle { create_before_destroy = true }
 }
 
-###############################################################################
-# Fetch DB password from Secrets Manager at plan time
-###############################################################################
-data "aws_secretsmanager_secret" "db" {
-  arn = var.db_secret_arn
-}
-
+# Read credentials from Secrets Manager
 data "aws_secretsmanager_secret_version" "db" {
-  secret_id = data.aws_secretsmanager_secret.db.id
+  secret_id = var.secret_arn
 }
 
 locals {
-  db_creds = jsondecode(data.aws_secretsmanager_secret_version.db.secret_string)
+  creds = jsondecode(data.aws_secretsmanager_secret_version.db.secret_string)
 }
 
-###############################################################################
-# RDS Instance
-###############################################################################
 resource "aws_db_instance" "this" {
-  identifier        = "${local.name_prefix}-postgres"
-  engine            = "postgres"
-  engine_version    = var.postgres_engine_version
-  instance_class    = var.rds_instance_class
+  # Naming
+  identifier = "${var.env_name}-postgres"
+
+  # Engine — postgres 16.3 is stable and available in ap-south-1
+  engine         = "postgres"
+  engine_version = "16.3"
+  instance_class = var.instance_class
+
+  # Storage
   allocated_storage = var.allocated_storage
-  storage_type      = "gp3"
+  storage_type      = "gp2"       # gp2 avoids gp3 IOPS issues on t3.micro
   storage_encrypted = true
-  kms_key_id        = var.kms_key_arn   # null = AWS managed key
 
-  db_name  = local.db_creds["dbname"]
-  username = local.db_creds["username"]
-  password = local.db_creds["password"]
+  # Credentials from Secrets Manager
+  db_name  = local.creds["dbname"]
+  username = local.creds["username"]
+  password = local.creds["password"]
 
+  # Network
   db_subnet_group_name   = aws_db_subnet_group.this.name
   parameter_group_name   = aws_db_parameter_group.this.name
   vpc_security_group_ids = [var.rds_sg_id]
-
-  multi_az               = var.multi_az
   publicly_accessible    = false
-  deletion_protection    = var.deletion_protection
-  skip_final_snapshot    = var.skip_final_snapshot
-  final_snapshot_identifier = var.skip_final_snapshot ? null : "${local.name_prefix}-final-snapshot"
 
+  # Lifecycle
+  multi_az                = false
+  deletion_protection     = false
+  skip_final_snapshot     = true
+  delete_automated_backups = true
+
+  # Backup
   backup_retention_period = var.backup_retention_days
   backup_window           = "02:00-03:00"
   maintenance_window      = "Mon:04:00-Mon:05:00"
 
-  enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
+  # Monitoring
+  enabled_cloudwatch_logs_exports       = ["postgresql"]
+  performance_insights_enabled          = false  # not supported on t3.micro free tier
+  auto_minor_version_upgrade            = true
+  apply_immediately                     = true
 
-  performance_insights_enabled          = true
-  performance_insights_retention_period = 7
-
-  auto_minor_version_upgrade = true
-  apply_immediately          = false   # avoid unplanned restarts in production
-
-  tags = merge(var.common_tags, {
-    Name        = "${local.name_prefix}-postgres"
-    Environment = var.environment
-  })
+  tags = merge(var.common_tags, { Name = "${var.env_name}-postgres" })
 }
 
-###############################################################################
-# Update Secrets Manager with the actual endpoint (idempotent update)
-###############################################################################
+# Update secret with real RDS endpoint after creation
 resource "aws_secretsmanager_secret_version" "update_host" {
-  secret_id = var.db_secret_arn
+  secret_id = var.secret_arn
   secret_string = jsonencode({
-    username = local.db_creds["username"]
-    password = local.db_creds["password"]
+    username = local.creds["username"]
+    password = local.creds["password"]
     engine   = "postgres"
     host     = aws_db_instance.this.address
     port     = aws_db_instance.this.port
-    dbname   = local.db_creds["dbname"]
+    dbname   = local.creds["dbname"]
   })
-
   depends_on = [aws_db_instance.this]
 }

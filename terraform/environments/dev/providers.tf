@@ -1,22 +1,10 @@
-###############################################################################
-# DEV — Providers
-###############################################################################
-
 terraform {
   required_version = ">= 1.6.0"
-
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.5"
-    }
+    aws    = { source = "hashicorp/aws";    version = "~> 5.0" }
+    random = { source = "hashicorp/random"; version = "~> 3.5" }
   }
-
-  # ── Remote State ──────────────────────────────────────────────────────────
+  # Uncomment after bootstrap:
   # backend "s3" {
   #   bucket         = "496251222247-terraform-state"
   #   key            = "dev/terraform.tfstate"
@@ -27,14 +15,11 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
-
+  region = "ap-south-1"
   default_tags {
     tags = {
-      Project     = var.project
-      Environment = "dev"
-      ManagedBy   = "terraform"
-      Repository  = "observability-platform"
+      ManagedBy  = "terraform"
+      Repository = "observability-platform"
     }
   }
 }
