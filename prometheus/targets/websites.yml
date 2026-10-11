@@ -14,6 +14,38 @@
     category: main
     owner: eclouddevops
 
+# ── UAT Website — obs-uat-ec2 (i-024f0a74e4a4258ae) ───────────────────
+# Private IP: 172.31.60.97
+# Public IP:  <PENDING — assign Elastic IP, then update this target>
+# After EIP is assigned run: bash scripts/setup-apache-env.sh 172.31.60.97 uat ssm
+# Then replace the placeholder below with the assigned public IP.
+- targets:
+    - 'http://<uat-eip>/health.html'   # ← replace with Elastic IP for obs-uat-ec2
+  labels:
+    env: uat
+    service: website
+    instance_id: i-024f0a74e4a4258ae
+    name: obs-uat-ec2
+    private_ip: 172.31.60.97
+    category: main
+    owner: eclouddevops
+
+# ── Dev Website — obs-dev-ec2 (i-02f4285b93fba9910) ───────────────────
+# Private IP: 10.1.22.109
+# Public IP:  <PENDING — assign Elastic IP, then update this target>
+# After EIP is assigned run: bash scripts/setup-apache-env.sh 10.1.22.109 dev ssm
+# Then replace the placeholder below with the assigned public IP.
+- targets:
+    - 'http://<dev-eip>/health.html'   # ← replace with Elastic IP for obs-dev-ec2
+  labels:
+    env: dev
+    service: website
+    instance_id: i-02f4285b93fba9910
+    name: obs-dev-ec2
+    private_ip: 10.1.22.109
+    category: main
+    owner: eclouddevops
+
 # ── E-Commerce Website ─────────────────────────────────────────────────
 # - targets:
 #     - 'https://shop.eclouddevops.com'

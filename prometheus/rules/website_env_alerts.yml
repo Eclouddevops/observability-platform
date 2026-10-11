@@ -1,0 +1,79 @@
+groups:
+
+  # ══════════════════════════════════════════════════════════════════════
+  # UAT / Dev Environment Website Alerts
+  # These fire when websites running on UAT or Dev EC2 instances are
+  # unreachable, slow, or returning non-2xx responses.
+  # ══════════════════════════════════════════════════════════════════════
+
+  - name: website_env_alerts
+    rules:
+
+      # ── UAT Website Down ─────────────────────────────────────────────
+      - alert: UATWebsiteDown
+        expr: probe_success{job="blackbox-http", env="uat"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          priority: P1
+          env: uat
+          team: infrastructure
+        annotations:
+          summary: "🔴 [P1] UAT Website DOWN: {{ $labels.instance }}"
+          description: "UAT website {{ $labels.instance }} has been unreachable for 2 minutes. EC2 instance or web server may be down."
+          runbook: "1. SSH into UAT EC2 and check web server: systemctl status nginx / apache2 / your-app\n2. Check EC2 instance state in AWS Console\n3. Verify security group allows port 80/443\n4. Test manually: curl -I {{ $labels.instance }}"
+
+      # ── Dev Website Down ─────────────────────────────────────────────
+      - alert: DevWebsiteDown
+        expr: probe_success{job="blackbox-http", env="dev"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          priority: P2
+          env: dev
+          team: infrastructure
+        annotations:
+          summary: "🟡 [P2] Dev Website DOWN: {{ $labels.instance }}"
+          description: "Dev website {{ $labels.instance }} has been unreachable for 2 minutes. EC2 instance or web server may be down."
+          runbook: "1. SSH into Dev EC2 and check web server: systemctl status nginx / apache2 / your-app\n2. Check EC2 instance state in AWS Console\n3. Verify security group allows port 80/443\n4. Test manually: curl -I {{ $labels.instance }}"
+
+      # ── UAT Website Slow Response ────────────────────────────────────
+      - alert: UATWebsiteSlowResponse
+        expr: probe_duration_seconds{job="blackbox-http", env="uat"} > 5
+        for: 5m
+        labels:
+          severity: warning
+          priority: P2
+          env: uat
+          team: infrastructure
+        annotations:
+          summary: "🟡 [P2] UAT Slow Response: {{ $labels.instance }} taking {{ $value | printf \"%.1f\" }}s"
+          description: "UAT website {{ $labels.instance }} response time above 5s for 5+ minutes."
+          runbook: "Check UAT EC2 CPU/memory usage. Review application logs for slow queries or errors."
+
+      # ── Dev Website Slow Response ────────────────────────────────────
+      - alert: DevWebsiteSlowResponse
+        expr: probe_duration_seconds{job="blackbox-http", env="dev"} > 5
+        for: 5m
+        labels:
+          severity: warning
+          priority: P3
+          env: dev
+          team: infrastructure
+        annotations:
+          summary: "🟠 [P3] Dev Slow Response: {{ $labels.instance }} taking {{ $value | printf \"%.1f\" }}s"
+          description: "Dev website {{ $labels.instance }} response time above 5s for 5+ minutes."
+          runbook: "Check Dev EC2 CPU/memory usage. Review application logs."
+
+      # ── Any Env Website HTTP Error ───────────────────────────────────
+      - alert: WebsiteHTTPError
+        expr: probe_http_status_code{job="blackbox-http", env=~"uat|dev"} >= 400
+        for: 2m
+        labels:
+          severity: warning
+          priority: P2
+          team: infrastructure
+        annotations:
+          summary: "🟡 [P2] HTTP Error on {{ $labels.env | upper }}: {{ $labels.instance }} → {{ $value }}"
+          description: "{{ $labels.env | upper }} website {{ $labels.instance }} is returning HTTP {{ $value }} status for 2+ minutes."
+          runbook: "Check web server error logs. Verify application is running correctly on the EC2 instance."

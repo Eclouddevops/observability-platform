@@ -317,7 +317,7 @@ sudo certbot renew --dry-run
 sudo certbot renew
 
 # Step 4 — Update ssl_targets.yml if new domain added
-nano prometheus/targets/ssl_targets.yml
+vim prometheus/targets/ssl_targets.yml
 curl -X POST http://localhost:9090/-/reload
 ```
 
@@ -382,7 +382,7 @@ docker stats --no-stream
 
 # Step 4 — If auto-discovery is scanning too fast, slow it down
 # Edit .env: DISCOVERY_INTERVAL_MINUTES=5
-nano .env
+vim .env
 docker compose restart auto-discovery
 ```
 
@@ -431,7 +431,7 @@ du -sh /var/lib/docker/volumes/*prometheus*
 # Step 6 — If critical, reduce Prometheus retention
 # Edit docker-compose.yml:
 #   --storage.tsdb.retention.time=15d  (reduce from 30d)
-nano docker-compose.yml
+vim docker-compose.yml
 docker compose restart prometheus
 ```
 
@@ -498,7 +498,7 @@ curl -s "http://localhost:9090/api/v1/query?query=up{instance='<private-ip>:9100
 
 ```bash
 # Edit websites.yml
-nano prometheus/targets/websites.yml
+vim prometheus/targets/websites.yml
 
 # Add entry:
 # - targets:
@@ -508,7 +508,7 @@ nano prometheus/targets/websites.yml
 #     service: website
 
 # Edit ssl_targets.yml (for SSL expiry check)
-nano prometheus/targets/ssl_targets.yml
+vim prometheus/targets/ssl_targets.yml
 
 # Add entry:
 # - targets:
@@ -530,7 +530,7 @@ curl -X POST http://localhost:9090/-/reload
 #    Permissions: ObservabilityPlatformPolicy
 
 # 2. Add to .env
-nano .env
+vim .env
 
 # Append to AWS_ACCOUNTS:
 # AWS_ACCOUNTS=[
@@ -895,3 +895,111 @@ Root cause analysis posted to MS Teams
 
 *Last updated: October 2026 | Maintained by: Infrastructure Team*
 *Platform: Eclouddevops/observability-platform | Server: i-0b7b07809dc9007ac*
+
+---
+
+## 10. Apache Setup on UAT / Dev EC2 Instances
+
+### Overview
+
+UAT and Dev EC2 instances run Apache as the web server (HTTP port 80).
+The script `scripts/setup-apache-env.sh` automates the full setup:
+
+- Installs Apache if missing (Ubuntu/Debian → `apache2`, Amazon Linux → `httpd`)
+- Configures an HTTP-only virtual host on port 80
+- Creates a `/health.html` endpoint for Blackbox Exporter probes
+- Enables Apache to auto-start on every EC2 reboot (`systemctl enable`)
+- Restarts Apache and verifies it responds on port 80
+
+### Run the Setup Script
+
+```bash
+# From the observability server (54.88.150.33):
+cd /observability-platform
+
+# ── UAT Instance (SSH key method) ──────────────────────────────────
+bash scripts/setup-apache-env.sh <uat-ec2-ip> uat ~/.ssh/your-key.pem
+
+# ── Dev Instance (SSH key method) ──────────────────────────────────
+bash scripts/setup-apache-env.sh <dev-ec2-ip> dev ~/.ssh/your-key.pem
+
+# ── SSM method (no SSH key — requires SSM Agent + IAM role on EC2) ─
+bash scripts/setup-apache-env.sh <uat-ec2-ip> uat ssm
+bash scripts/setup-apache-env.sh <dev-ec2-ip> dev ssm
+
+# ── Amazon Linux (ec2-user instead of ubuntu) ──────────────────────
+bash scripts/setup-apache-env.sh <uat-ec2-ip> uat ~/.ssh/your-key.pem ec2-user
+```
+
+### After the Script Runs
+
+1. **Open port 80** in the EC2 Security Group (if not already open):
+   - AWS Console → EC2 → Security Groups → Add Inbound: `TCP 80 from 0.0.0.0/0`
+
+2. **Update `prometheus/targets/websites.yml`** with the actual IP printed by the script:
+   ```yaml
+   - targets:
+       - 'http://<uat-ec2-public-ip>/health.html'
+     labels:
+       env: uat
+       service: website
+       category: main
+       owner: eclouddevops
+   ```
+
+3. **Reload Prometheus**:
+   ```bash
+   curl -X POST http://localhost:9090/-/reload && echo "Reloaded"
+   ```
+
+4. **Verify** the target is UP in Prometheus:
+   ```
+   http://54.88.150.33:9090/targets  → blackbox-http job → green UP
+   ```
+
+### Verify Apache Status Manually
+
+```bash
+# Check Apache is running
+sudo systemctl status apache2        # Ubuntu/Debian
+sudo systemctl status httpd          # Amazon Linux
+
+# Check it's enabled at boot
+sudo systemctl is-enabled apache2    # should print: enabled
+sudo systemctl is-enabled httpd      # Amazon Linux
+
+# Test HTTP response locally
+curl -I http://localhost/
+curl -sf http://localhost/health.html && echo "Health OK"
+
+# Re-enable if somehow disabled
+sudo systemctl enable apache2 && sudo systemctl start apache2
+sudo systemctl enable httpd   && sudo systemctl start httpd
+
+# View Apache error log
+sudo tail -50 /var/log/apache2/error.log      # Ubuntu
+sudo tail -50 /var/log/httpd/error_log        # Amazon Linux
+```
+
+### Files Created on the EC2 Instance
+
+| Path | Purpose |
+|------|---------|
+| `/etc/apache2/sites-available/<env>-website.conf` | Virtual host config (Ubuntu) |
+| `/etc/httpd/conf.d/<env>-website.conf` | Virtual host config (Amazon Linux) |
+| `/var/www/html/<env>/index.html` | Default landing page |
+| `/var/www/html/<env>/health.html` | Health-check endpoint (returns 200 OK) |
+
+### Alert Behaviour After Setup
+
+Once the IP is in `websites.yml` and Prometheus is reloaded:
+
+| Alert | Fires When |
+|-------|-----------|
+| `UATWebsiteDown` | Apache stops / port 80 unreachable for 2 min |
+| `DevWebsiteDown` | Apache stops / port 80 unreachable for 2 min |
+| `UATWebsiteSlowResponse` | Response > 5 s for 5 min |
+| `DevWebsiteSlowResponse` | Response > 5 s for 5 min |
+| `WebsiteHTTPError` | Apache returns HTTP 4xx/5xx for 2 min |
+
+*Last updated: October 2026*

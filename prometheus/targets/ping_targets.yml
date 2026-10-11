@@ -2,9 +2,20 @@
 # These hosts are ICMP-pinged by Blackbox Exporter for uptime checks.
 # ─────────────────────────────────────────────────────────────────────
 
+# ── UAT EC2 (obs-uat-ec2 / i-024f0a74e4a4258ae) ──────────────────────
 - targets:
-    # - '10.0.1.100'    # web-server-01
-    # - '10.0.2.50'     # db-server-01
+    - '172.31.60.97'
   labels:
-    env: production
+    env: uat
     service: ping
+    name: obs-uat-ec2
+    instance_id: i-024f0a74e4a4258ae
+
+# ── Dev EC2 (obs-dev-ec2 / i-02f4285b93fba9910) ──────────────────────
+- targets:
+    - '10.1.22.109'
+  labels:
+    env: dev
+    service: ping
+    name: obs-dev-ec2
+    instance_id: i-02f4285b93fba9910

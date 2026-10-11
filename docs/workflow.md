@@ -59,7 +59,7 @@ STEP 2: Clone repository
 STEP 3: Configure credentials
 ─────────────────────────────────────────────────────────────────────
     cp .env.example .env
-    nano .env
+    vim .env
 
     ⭐ MINIMUM REQUIRED SETTINGS:
     ┌─────────────────────────────────────────────────┐
@@ -374,7 +374,7 @@ OBSERVABILITY ACCOUNT           NEW TARGET ACCOUNT
       │  STEP 2: On observability server │
       │  ────────────────────────────────│
       │                                  │
-      │  nano /observability-platform/.env
+      │  vim /observability-platform/.env
       │                                  │
       │  AWS_ACCOUNTS=[                  │
       │    {                             │
@@ -782,7 +782,7 @@ ADD DOMAIN TO MONITOR:
 ────────────────────────
 
   [1] Edit ssl_targets.yml:
-      nano prometheus/targets/ssl_targets.yml
+      vim prometheus/targets/ssl_targets.yml
 
       Add:
       - targets:

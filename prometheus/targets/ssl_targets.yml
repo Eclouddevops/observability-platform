@@ -14,6 +14,26 @@
     category: main
     owner: eclouddevops
 
+# ── UAT Website SSL ────────────────────────────────────────────────────
+# Uncomment and update if your UAT site uses HTTPS
+# - targets:
+#     - 'uat.aiobz.com:443'           # Replace with actual UAT domain
+#   labels:
+#     env: uat
+#     service: ssl
+#     category: main
+#     owner: eclouddevops
+
+# ── Dev Website SSL ────────────────────────────────────────────────────
+# Uncomment and update if your Dev site uses HTTPS
+# - targets:
+#     - 'dev.aiobz.com:443'           # Replace with actual Dev domain
+#   labels:
+#     env: dev
+#     service: ssl
+#     category: main
+#     owner: eclouddevops
+
 # ── E-Commerce SSL ─────────────────────────────────────────────────────
 # - targets:
 #     - 'shop.eclouddevops.com:443'
